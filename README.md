@@ -18,5 +18,8 @@ To flash your C code onto an ATmega, you need to compile that code into a certai
 $ python3 make.py
 ```
 Then just enter what board you want to flash and select if you want to flash it or just compile it.
-
-That's it! How exciting!
+If you're flashing the board for the first time make sure to set the fuse bits on the MCU by typing "fuses" when prompted like so:
+```bash
+$ Flash (y/n) or Set Fuses(fuses):fuses
+```
+Voila! Happy programming 
