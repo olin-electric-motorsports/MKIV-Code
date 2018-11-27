@@ -18,12 +18,12 @@
 
 int main (void) {
 
-		// Initialize UART peripheral
-		LOG_init();
+	// Initialize UART peripheral
+	LOG_init();
 
-		//uint8_t var = 0;
-		//char disp_string[64];
-		//char static_msg[] = "static example msg";
+	//uint8_t var = 0;
+	//char disp_string[64];
+	//char static_msg[] = "static example msg";
 
     //Data Direction Register X
     //Decides input or output
@@ -54,3 +54,4 @@ int main (void) {
 
 	}
 }
+// 
