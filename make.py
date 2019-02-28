@@ -1,8 +1,10 @@
+#!/usr/bin/python3
 '''
-The official build chain for the 2017-2018 Olin Electric Motorsports FSAE Formula Team
+The official build chain for the 2018-2019 Olin Electric Motorsports FSAE Formula Team
 For more information on the team: https://www.olinelectricmotorsports.com/
 
 @author: Peter Seger '20
+@author: Alex Hoppe  '19 - added command-line parsing
 
 Released under MIT License 2018
 '''
@@ -15,11 +17,13 @@ import sys
 import subprocess
 import shutil
 import time
-
+import argparse
+from bullet import Bullet, Prompt
 
 CC = 'avr-gcc'
 PROGRAMMER = 'avrispmkII'
 # PROGRAMMER = 'dragon_isp'
+# PROGRAMMER = 'usbasp'
 PORT = 'usb'
 AVRDUDE = 'avrdude'
 OBJCOPY = 'avr-objcopy'
@@ -37,12 +41,42 @@ AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
 
 possible_boards = []
 
+# Parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("-b", "--board", help="the name of the board you'd like to build/flash)")
+parser.add_argument("-f", "--flash", help="option to flash the built code to the programmer", action="store_true")
+parser.add_argument("-F", "--fuses", help="set pre-programmed fuse bits", action="store_true")
+parser.add_argument("-p", "--programmer", help="which programmer type to use: dragon_isp, usbasp, or avrispmkII") 
 
-def get_input():
-    board = input("Board (i.e. Dashboard) or build All (all): ")
-    flash = input("Flash (y/n) or Set Fuses(fuses): ")
+def get_input(board_list):
+    args = parser.parse_args()
+    if args.board: 
+        board = args.board
+    else:
+        board_list.append("all")
+        prompt = Bullet("Board (i.e. Dashboard) or build All (all): ", choices=board_list)
+        board = prompt.launch()
+        # board = input("Board (i.e. Dashboard) or build All (all): ")
+    if args.flash:
+        flash = "y" if args.flash else "n"
+    elif args.fuses:
+        flash = "fuses"
+    else:
+        flash = input("Flash (y/n) or Set Fuses(fuses): ")
+    if args.programmer:
+        global PROGRAMMER
+        PROGRAMMER = args.programmer
+        rebuild_flags()
     return board, flash
 
+def rebuild_flags():
+    global CFLAGS
+    global LDFLAG
+    global AVRFLAGS
+
+    CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror '
+    LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER + ' -DF_CPU=' + F_CPU
+    AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
 
 def build_boards_list(boards, head):
     '''
@@ -224,11 +258,12 @@ if __name__ == "__main__":
     boards = './boards/'
     possible_boards = build_boards_list(boards, cwd)    # Get a list of all boards
 
-    board = input("Board (i.e. Dashboard) or build All (all): ")
+    board, flash = get_input(possible_boards)
+
     if(board == 'all'):
         make_all(cwd, possible_boards)
     else:
-        flash = input("Flash (y/n) or Set Fuses(fuses): ")
+        # flash = input("Flash (y/n) or Set Fuses(fuses): ")
 
         if(flash == 'fuses'):
             set_fuse()
