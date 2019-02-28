@@ -1,10 +1,8 @@
 /*
  * Tutorial 1
  *
- * The goal of this program is to show a very basic way to turn on a light. It
- * is also referenced in Tutorial 0, about how to compile code and flash it to
- * the microcontroller, and it explains most of the parts of one of our AVR-C
- * programs.
+ * The goal of this program is to show the basic structure of many of our AVR-C
+ * programs. It performs a similar function to Tutorial 0.
  *
  * All reference info is pulled from
  * https://www.nongnu.org/avr-libc/user-manual/index.html
@@ -31,6 +29,8 @@
 /* Includes pre-defined functions we can use for delays. */
 #include <util/delay.h>
 
+/* Includes a file of helper functions that we made ourselves */
+#include "helper.h"
 
 /* ----------------------------------------------------------------------------
  * Next up, a program has its own macro definitions and global variables
@@ -74,12 +74,13 @@ void setup_led_pin(void) {
     DDRB |= _BV(LED_PIN);
 }
 
-void blink_once(void) {
-    PORTB |= _BV(LED_PIN);  // Turn one LED on
-    _delay_ms(200);          // wait 200 ms
-    PORTB |= _BV(LED_PIN);  // Turn LED off
-    _delay_ms(200);          // wait 200 ms
-}
+/* This header file was moved to helpers.c */
+// void blink_once(int pin) {      
+//     PORTB |= _BV(pin);  // Turn one LED on
+//     _delay_ms(200);         // wait 200 ms
+//     PORTB |= _BV(pin);  // Turn LED off
+//     _delay_ms(200);         // wait 200 ms
+// }
 
 /* ----------------------------------------------------------------------------
  * Then at the bottom we have our main function (entry point) where the code
@@ -97,9 +98,8 @@ int main (void) {                       /* This part of the code runs once */
     /* Set the data direction register  
      * so the led pin is output */
 
-    // DDRB = DDRB | _BV(PB0);  // Using | and explicit name         
-    DDRB |= _BV(LED_PIN);       // Using |= and pin name macro
-    // setup_led_pin();         // A helper function that does the same thing
+    // DDRB |= _BV(LED_PIN);    // Using |= and pin name macro
+    setup_led_pin();            // A helper function that does the same thing
 
     /* Set up input pin with pull-up resistor */
     DDRB &= ~_BV(PINOUT_1);     /* Set pin to input (unnecessary, pins
@@ -108,15 +108,14 @@ int main (void) {                       /* This part of the code runs once */
                                  * this sets a pull-up resistor */
 
     /* Blink LED once */
-    blink_once();                       
+    blink_once(LED_PIN);                       
 
     while (1) {                     /* This part of the code runs forever */
         
-//      if (PINB & _BV(PINOUT_1)) {             /* Alternate way of writing */
         if (bit_is_set(PINB, PINOUT_1)) {       // If the Pinout1 pin is high
             PORTB &= ~_BV(LED_PIN);             // Turn LED off
         } else {                                // Otherwise
             PORTB |= _BV(LED_PIN);              // Turn it on
         }
-    }                                   
+    }                               
 }
