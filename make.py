@@ -50,6 +50,8 @@ parser.add_argument("-p", "--programmer", help="which programmer type to use: dr
 
 def get_input(board_list):
     args = parser.parse_args()
+    global PROGRAMMER
+        
     if args.board: 
         board = args.board
     else:
@@ -57,16 +59,23 @@ def get_input(board_list):
         prompt = Bullet("Board (i.e. Dashboard) or build All (all): ", choices=board_list)
         board = prompt.launch()
         # board = input("Board (i.e. Dashboard) or build All (all): ")
+
     if args.flash:
         flash = "y" if args.flash else "n"
     elif args.fuses:
         flash = "fuses"
     else:
         flash = input("Flash (y/n) or Set Fuses(fuses): ")
-    if args.programmer:
-        global PROGRAMMER
-        PROGRAMMER = args.programmer
-        rebuild_flags()
+    
+    if not flash == "n":
+        if args.programmer:
+            PROGRAMMER = args.programmer
+        else: 
+            prompt = Bullet("Which programmer is connected?: ", choices=['avrispmkII', 'dragon_isp', 'usbasp'] )
+            PROGRAMMER = prompt.launch()
+
+    rebuild_flags()
+
     return board, flash
 
 def rebuild_flags():
