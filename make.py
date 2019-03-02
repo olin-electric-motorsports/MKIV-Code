@@ -18,7 +18,7 @@ import subprocess
 import shutil
 import time
 import argparse
-from bullet import Bullet, Prompt
+from bullet import Bullet
 
 CC = 'avr-gcc'
 PROGRAMMER = 'avrispmkII'
