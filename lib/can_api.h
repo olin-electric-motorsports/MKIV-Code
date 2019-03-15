@@ -29,6 +29,8 @@
 
 #define CAN_ID_BRAKE_PRESSURE    ((uint16_t) 0x16)
 
+#define CAN_ID_TUTORIAL6         ((uint16_t) 0x25)
+
 
 /* Message Lengths */
 #define CAN_LEN_GLOBAL          ((uint16_t) 8)
@@ -53,11 +55,12 @@
 
 #define CAN_LEN_BRAKE_PRESSURE  ((uint16_t) 2)
 
+#define CAN_LEN_TUTORIAL6       ((uint16_t) 1)
 
 /* Masks */
-#define CAN_IDM_global            ((uint16_t) 0x00)
-#define CAN_IDM_single            ((uint16_t) 0xFF)
-#define CAN_IDM_double            ((uint16_t) 0xFE)
+#define CAN_MSK_GLOBAL            ((uint16_t) 0x00)
+#define CAN_MSK_SINGLE            ((uint16_t) 0xFF)
+#define CAN_MSK_DOUBLE            ((uint16_t) 0xFE)
 
 
 /* Modes of Operation */
