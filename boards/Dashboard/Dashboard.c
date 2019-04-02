@@ -58,8 +58,8 @@ Author:
 #define PORT_START_LED              PORTC
 
 /* Ready to Drive */
-#define RTD_LD                  PC5
-#define RTD_PORT                PORTC
+#define RTD_LD                      PC5
+#define RTD_PORT                    PORTC
 
 
 // CAN Positions
@@ -88,6 +88,7 @@ Author:
 
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
+volatile uint8_t gBuzz = 0x00;  // Global Flag for Buzzer
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 uint8_t can_recv_msg[8] = {};
 
@@ -125,8 +126,10 @@ ISR(CAN_INT_vect) {
 
         if(can_recv_msg[1] == 0xFF) {
             gFlag |= _BV(BRAKE_PRESSED);           //trip flag
+            gBuzz |= 0b00000010;
         } else {
             gFlag &= ~_BV(BRAKE_PRESSED);          //reset flag
+            gBuzz = gBuzz - 0b00000010;
         }
 
         if(can_recv_msg[4] == 0xFF) {
@@ -137,7 +140,7 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+        CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
     }
 
     /*----- BMS Master Mailbox -----*/
@@ -171,7 +174,7 @@ ISR(CAN_INT_vect) {
 
       //Setup to Receive Again
       CANSTMOB = 0x00;
-      CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
+      CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_MSK_SINGLE);
     }
 
     /*----- AIRs Mailbox -----*/
@@ -183,6 +186,7 @@ ISR(CAN_INT_vect) {
       can_recv_msg[3] = CANMSG;   // BMS status
       can_recv_msg[4] = CANMSG;   // IMD status
 
+
       // Grab IMD status
       if(can_recv_msg[4] == 0xFF) {
           gFlag |= _BV(IMD_STATUS);
@@ -190,6 +194,7 @@ ISR(CAN_INT_vect) {
 
       if(can_recv_msg[0] == 0xFF){
           gFlag |= _BV(PRECHARGE);
+          gBuzz |= 0b0000001;
       }
 
 
@@ -198,7 +203,7 @@ ISR(CAN_INT_vect) {
 
       //Setup to Receive Again
       CANSTMOB = 0x00;
-      CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
+      CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_MSK_SINGLE);
     }
 
     CANPAGE = (DASHLEFT_MBOX << MOBNB0);
@@ -217,7 +222,7 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(DASHLEFT_MBOX, CAN_ID_THROTTLE, CAN_LEN_THROTTLE, CAN_IDM_single);
+        CAN_wait_on_receive(DASHLEFT_MBOX, CAN_ID_THROTTLE, CAN_LEN_THROTTLE, CAN_MSK_SINGLE);
     }
 
 
@@ -294,8 +299,8 @@ void initIO(void) {
     TCCR1B &= ~_BV(WGM13);
 
 
-    // OCR1A = (uint8_t) 30;      // Duty Cycle
-    // OCR1B = (uint8_t) 255;      // Duty Cycle
+    OCR1A = (uint8_t) 30;      // Duty Cycle
+    OCR1B = (uint8_t) 255;      // Duty Cycle
 
 }
 
@@ -308,8 +313,10 @@ void checkShutdownState(void)   {
     // Check Start Button
     if(bit_is_set(gFlag, STATUS_START)) {
         gCAN_MSG[CAN_START_BUTTON] = 0xFF;
+        gBuzz |= 0b00000100;
     } else {
         gCAN_MSG[CAN_START_BUTTON] = 0x00;
+        gBuzz &= 0b11111011;
     }
 }
 
@@ -326,17 +333,22 @@ void updateStateFromFlags(void) {
     if((bit_is_set(gFlag, IMD_STATUS))) {
         PORT_IMD_LED |= _BV(IMD_LED);
     }
-
-    //Check if Buzzer is ready to sound (See sound rules pg.X)
-    // if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
-    //     RTD_PORT |= _BV(RTD_LD);
-    //     _delay_ms(1000);
-    //     RTD_PORT &= ~(_BV(RTD_LD));
-    //     buzzerSet = 1;
-    // } else {
-    //     RTD_PORT &= ~_BV(RTD_LD);
-    // }
 }
+
+void rtdBuzzer(void) {
+
+    if(gBuzz == 0b00000111){
+        RTD_PORT |= _BV(RTD_LD);
+        _delay_ms(400);
+        RTD_PORT &= ~(_BV(RTD_LD));
+
+        gBuzz = 0b11111111;
+    }
+
+
+
+}
+
 
 
 void initADC(void) {
@@ -371,22 +383,17 @@ int main(void){
     CAN_init(CAN_ENABLED);
     // CBN Enable
 
-    //Turn on RTD Sound (For Roadkill Harness)
-    // RTD_PORT |= _BV(RTD_LD);
-    // _delay_ms(400);
-    // RTD_PORT &= ~(_BV(RTD_LD));
-
-    CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
-    CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
-    CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
-    CAN_wait_on_receive(DASHLEFT_MBOX, CAN_ID_THROTTLE, CAN_LEN_THROTTLE, CAN_IDM_single);
+    CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
+    CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_MSK_SINGLE);
+    CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_MSK_SINGLE);
+    CAN_wait_on_receive(DASHLEFT_MBOX, CAN_ID_THROTTLE, CAN_LEN_THROTTLE, CAN_MSK_SINGLE);
 
     initTimer();                        // Initialize Timer
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
-    // uint8_t count = 0;
 
-    // OCR1B = curr_SoC;
+    DDRB |= _BV(PB5) | _BV(PB6) | _BV(PB7);
+    PORTB |= _BV(PB6);
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
@@ -409,5 +416,18 @@ int main(void){
             }
             gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
         }
+
+        rdtBuzzer();
+
+
+        PORTB ^= _BV(PB5);
+        PORTB ^= _BV(PB6);
+        PORTB ^= _BV(PB7); 
+
+        // RTD_PORT |= _BV(RTD_LD);
+        // _delay_ms(400);
+        // RTD_PORT &= ~(_BV(RTD_LD));         
+        
+        _delay_ms(1000);
     }
 }
