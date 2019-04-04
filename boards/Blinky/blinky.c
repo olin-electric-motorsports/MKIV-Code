@@ -9,14 +9,14 @@ int main (void) {
 
     //Data Direction Register X
     //Decides input or output
-	DDRB |= _BV(PB0) | _BV(PB1) | _BV(PB2);
-	PORTB |= _BV(PB1);
+	DDRB |= _BV(PB5) | _BV(PB6) | _BV(PB7);
+	PORTB |= _BV(PB5);
 
 	while(1) {
         //LEDs flip once per second
-		PORTB ^= _BV(PB0);
-		PORTB ^= _BV(PB1);
-		PORTB ^= _BV(PB2);			
+		PORTB ^= _BV(PB5);
+		PORTB ^= _BV(PB6);
+		PORTB ^= _BV(PB7);			
 		
         _delay_ms(1000);
 
