@@ -6,6 +6,9 @@
 //Import Statements
 #include <avr/io.h>
 #include <util/delay.h>
+#include <string.h>
+#include <stdio.h>
+#include "log_uart.h"
 
 //Macro Definitinos
 
@@ -60,10 +63,21 @@ int main(void) {
   initTimer();
   setPledOut();
 
+
+  LOG_init();
+  char uart_buf[32];
+
   while(1) {
       setLightsHigh();
+      sprintf(uart_buf, "ON");
+      LOG_println(uart_buf, strlen(uart_buf));
+
       _delay_ms(500);
+
       setLightsLow();
+      sprintf(uart_buf, "OFF");
+      LOG_println(uart_buf, strlen(uart_buf));
+
       _delay_ms(500);
   }
 }
