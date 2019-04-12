@@ -33,3 +33,6 @@
 
 *.elf
 *.hex
+
+SteeringRX
+OtherCFiles
