@@ -25,7 +25,7 @@
 
 /*----- Interrupt(s) -----*/
 ISR(CAN_INT_vect) {    
-    CANPAGE = (0);
+    CANPAGE = (0 << MOBNB0); // Switch to MOb 0, the one we're listening on.
     if(bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
 
