@@ -40,7 +40,7 @@
 #define CAN_LEN_THROTTLE        ((uint16_t) 4)
 #define CAN_LEN_AIR_CONTROL_CRITICAL     ((uint16_t) 4)
 #define CAN_LEN_AIR_CONTROL_SENSE        ((uint16_t) 6)
-#define CAN_LEN_DASHBOARD       ((uint16_t) 2)
+#define CAN_LEN_DASHBOARD       ((uint16_t) 3)
 #define CAN_LEN_BMS_CORE        ((uint16_t) 7)
 
 #define CAN_LEN_BMS_TEMP        ((uint16_t) 8)
