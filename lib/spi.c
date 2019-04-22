@@ -6,7 +6,7 @@
  * @author Alex Hoppe '19
  */
 
-
+#include "spi.h"
 
 // SPI functions
 void SPI_init(uint8_t clock_frequency, uint8_t spi_mode, uint8_t cs_port, uint8_t cs_pin){
@@ -27,21 +27,14 @@ void SPI_init(uint8_t clock_frequency, uint8_t spi_mode, uint8_t cs_port, uint8_
     gSPI_cs_pin = cs_pin;
 
     // Set up pin as output
-    switch (cs_port) {
-        case PORTB:
-            DDRB |= _BV(cs_pin);
-            break;
-        case PORTC:
-            DDRC |= _BV(cs_pin);
-            break;
-        case PORTD:
-            DDRD |= _BV(cs_pin);
-            break;
-        case PORTE:
-            DDRE |= _BV(cs_pin);
-            break;
-        default:
-            break;
+    if (cs_port == PORTB) {
+        DDRB |= _BV(cs_pin);
+    } else if (cs_port == PORTC) {
+        DDRC |= _BV(cs_pin);
+    } else if (cs_port == PORTD) {
+        DDRD |= _BV(cs_pin);
+    } else if (cs_port == PORTE) {
+        DDRE |= _BV(cs_pin);
     }
 
     // Hold /CS high until we start a transaction.

@@ -10,6 +10,9 @@
 #ifndef _SPI_H
 #define _SPI_H
 
+#include <stdint.h>
+#include <avr/io.h>
+
 // SPI frequencies
 #define SPI_FOSC_DIV_4      0b00
 #define SPI_FOSC_DIV_16     0b01
