@@ -26,10 +26,11 @@
 #define SPI_MODE_1_1        0b11
 
 // SPI pin variables
-uint8_t gSPI_cs_port, gSPI_cs_pin;
+volatile uint8_t *gSPI_cs_port;
+uint8_t gSPI_cs_pin;
 
 // SPI functions
-void SPI_init(uint8_t clock_frequency, uint8_t spi_mode, uint8_t cs_port, uint8_t cs_pin);
+void SPI_init(uint8_t clock_frequency, uint8_t spi_mode, volatile uint8_t* cs_port, uint8_t cs_pin);
 
 void SPI_start();
 
