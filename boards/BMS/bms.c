@@ -13,6 +13,7 @@
 #include <string.h>
 #include "can_api.h"
 #include "log_uart.h"
+#include "ltc6811.h"
 
 #define LED1_PIN    PD5
 #define LED2_PIN    PD6
@@ -76,11 +77,31 @@ int main (void) {
 
     LOG_init();
 
+    /* Write the relay on for testing as of now */
+    RELAY_DDR |= _BV(RELAY_PIN);
+    RELAY_PORT |= _BV(RELAY_PIN);
+
+    // Test out our wakeup code
+    // ltc6811_init(&PORTB, PB6);
+    SPI_init(SPI_FOSC_DIV_4, SPI_MODE_1_1, &PORTB, PB6);
+
+    _delay_us(1000);
+
+
     while (1) {
-        LED_PORT ^= _BV(LED3_PIN);
+        // LED_PORT ^= _BV(LED3_PIN);
         // Transmit status task
         if (gFlag & TRANSMIT_STATUS) {
             gFlag &= ~TRANSMIT_STATUS;
+
+            // Test LTC6820
+            // wakeup_sleep(TOTAL_IC);
+            uint8_t dat;
+            SPI_start();
+            SPI_transfer(0xFF, &dat);
+            // _delay_us(100);
+            SPI_end();
+
 
             LED_PORT ^= _BV(LED2_PIN);
 
