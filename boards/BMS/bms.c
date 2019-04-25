@@ -15,6 +15,8 @@
 #include "log_uart.h"
 #include "ltc6811.h"
 
+volatile uint8_t FLAGS = 0x00;
+
 #define LED1_PIN    PD5
 #define LED2_PIN    PD6
 #define LED3_PIN    PD7
@@ -26,7 +28,11 @@
 #define RELAY_PORT  PORTC
 #define RELAY_DDR   DDRC
 
-#define TRANSMIT_STATUS 0b00000001
+#define TRANSMIT_STATUS     0b00000001
+
+#define UNDER_VOLTAGE       0b00000100
+#define OVER_VOLTAGE        0b00001000
+#define SOFT_OVER_VOLTAGE   0b00010000
 
 volatile uint8_t gFlag = 0;
 uint8_t gStatusMessage[7];
@@ -35,6 +41,10 @@ uint8_t gCounterTransmit = 0;
 const uint8_t transmit_match = 10;
 
 char uart_buf[64];
+
+//Under Voltage and Over Voltage Thresholds
+const uint16_t OV_THRESHOLD = 42000;//35900; // Over voltage threshold ADC Code
+const uint16_t UV_THRESHOLD = 25000; //20000;// Under voltage threshold ADC Code
 
 // Scale down transmit task
 ISR(TIMER0_COMPA_vect) {
@@ -63,6 +73,68 @@ void setup_timer_100Hz(void) {
     OCR0A = 39;                /* Set the match register to 195 (maximum
                                  * period), 3.90625 kHz / 39 = 100.16 Hz */
 }
+
+// READ VOLTAGES /////////////////////////////////////////////////////////////////////////////////////////
+int8_t read_all_voltages(void) // Start Cell ADC Measurement
+{
+    int8_t error = 0;
+
+    // Set up ADC
+    wakeup_sleep(TOTAL_IC);
+    o_ltc6811_adcv(ADC_CONVERSION_MODE,ADC_DCP,CELL_CH_TO_CONVERT); //TODO write o_ltc6811_adcv()
+    o_ltc6811_pollAdc(); // TODO write o_ltc6811_pollAdc()
+
+    error = o_ltc6811_rdcv(0,TOTAL_IC, raw_cell_voltages); //Parse ADC measurements //TODO write o_ltc6811_rdcv
+
+    // 12 16-bit ints
+    for (int i = 0; i < TOTAL_IC; i++) {
+        char tmp_msg[108] = "";
+        sprintf(tmp_msg, "v%d,%u,%u,%u,%u,%u,"
+                         "%u,%u,%u,%u,"
+                         "%u,%u",
+                          i,
+                          error,
+                          raw_cell_voltages[i][0],
+                          raw_cell_voltages[i][1],
+                          raw_cell_voltages[i][2],
+                          raw_cell_voltages[i][3],
+                          raw_cell_voltages[i][4],
+                          raw_cell_voltages[i][6],
+                          raw_cell_voltages[i][7],
+                          raw_cell_voltages[i][8],
+                          raw_cell_voltages[i][9],
+                          raw_cell_voltages[i][10]);
+
+        LOG_println(tmp_msg, strlen(tmp_msg));
+    }
+
+    // Do value checking
+    for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
+        for (uint8_t cell = 0; cell < CELL_CHANNELS; cell++) {
+
+            uint16_t cell_value = raw_cell_voltages[ic][cell];
+
+            if (cell_value > OV_THRESHOLD) {
+                FLAGS |= OVER_VOLTAGE;
+            } else if (cell_value > SOFT_OV_THRESHOLD) {
+                FLAGS |= SOFT_OVER_VOLTAGE;
+
+                // :( sad side-effects
+                if (FLAGS & AIRS_CLOSED) {
+                    // IC and Cell are 1-indexed for discharge
+                    enable_discharge(ic + 1, cell + 1);
+                }
+            } else if (cell_value < UV_THRESHOLD) {
+                FLAGS |= UNDER_VOLTAGE;
+            } else {
+                FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE | SOFT_OVER_VOLTAGE);
+            }
+        }
+    }
+
+    return error;
+}
+
 
 int main (void) {
 
