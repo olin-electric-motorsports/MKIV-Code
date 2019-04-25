@@ -200,7 +200,7 @@ ISR(CAN_INT_vect) {
 
       if(can_recv_msg[0] == 0xFF){
           gFlag |= _BV(PRECHARGE);
-          gBuzz |= 0b0000001;
+          gBuzz |= 0b00000001;
       }
 
 
@@ -232,27 +232,13 @@ ISR(CAN_INT_vect) {
 
 }
 
-// ISR(PCINT0_vect) {
-//     /*
-//     Standard Pin Change Interupt
-//     Covers Interrupts: Start Button
-//     */
-//     // if(bit_is_set(PINC,START_PIN)) {
-//     //     gFlag |= _BV(STATUS_START);
-//     //     PORT_RJ_LED2 |= _BV(RJ_LED2);
-//     // } else {
-//     //     gFlag &= ~_BV(STATUS_START);
-//     // }
-// }
 
 ISR(PCINT1_vect) {
 
     if(bit_is_set(PINC,START_PIN)) {
         gFlag |= _BV(STATUS_START);
-        PORT_RJ_LED2 |= _BV(RJ_LED2);
     } else {
         gFlag &= ~_BV(STATUS_START);
-        PORT_RJ_LED2 &= ~_BV(RJ_LED2);
     }
 }
 
@@ -284,12 +270,14 @@ void initIO(void) {
     DDRC |= _BV(RTD_LD) | _BV(BMS_LED);
 
     //Set Start Pin as input pull up
-    DDRC &= ~_BV(START_PIN);
+    DDRC |= ~_BV(START_PIN);
     PORTC |= _BV(START_PIN);
 
-    /* Setup interrupt registers */
+    /* Setup pin change interrupt registers for start pin*/
     PCICR |= _BV(PCIE1);
     PCMSK1 |= _BV(PCINT14);
+
+
 
     /*----- Setup PWM output -----*/
     //Output compare pin is OC1B, so we need OCR1B as our counter
@@ -346,6 +334,7 @@ void updateStateFromFlags(void) {
         RTD_PORT |= _BV(RTD_LD);
         _delay_ms(400);
         RTD_PORT &= ~(_BV(RTD_LD));
+        PORT_START_LED |= _BV(START_LED);
 
         gBuzz = 0b00000000;               //Ready to buzz again if necessary
       }
@@ -399,25 +388,36 @@ int main(void){
     // RTD_PORT &= ~(_BV(RTD_LD));
 
     while(1) {
+
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
+            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag    
+
             PORT_RJ_LED1 ^= _BV(RJ_LED1); //Blink Orange LED for timing check
+
+            PORT_START_LED ^= _BV(START_LED);
 
             updateStateFromFlags();
             checkShutdownState();
 
 
-            if(bit_is_set(gFlag,STATUS_START)) {
+            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
+            // if(bit_is_set(gFlag,STATUS_START)) {
                 gCAN_MSG[0] = 0xFF;
                 CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
                 PORTB |= _BV(PB6);     // Blink Middle of 3 Debug LEDs for check
 
+            } else{
+                PORTB &= ~_BV(PB6);
+                RTD_PORT |= _BV(RTD_LD);
+                _delay_ms(400);
+                RTD_PORT &= ~(_BV(RTD_LD));                
             }
 
 
             if(bit_is_set(gFlag, BRAKE_PRESSED)) {
-                PORT_RJ_LED1 |= _BV(RJ_LED1);
+                PORT_RJ_LED2 |= _BV(RJ_LED2);
             }
-            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
+
         }
 
     }
