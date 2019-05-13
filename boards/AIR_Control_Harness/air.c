@@ -51,6 +51,11 @@
 #define FAULT_CODE_AIRMINUS_WELD		 					0x03;
 #define FAULT_CODE_AIRPLUS_CONTROL_LOSS 			0x04;
 #define FAULT_CODE_AIRMINUS_CONTROL_LOSS 			0x05;
+#define FAULT_CODE_PRECHARGE_STUCK						0X06;
+#define FAULT_CODE_PRECHARGE_CONTROL_LOSS			0X07;
+#define FAULT_CODE_DISCHARGE_STUCK						0X08;
+#define FAULT_CODE_DISCHARGE_CONTROL_LOSS			0X09;
+
 
 /*----- gFlag -----*/
 #define UPDATE_STATUS       0
@@ -69,10 +74,12 @@
 #define FLAG_SS_BMS   3
 
 /*----- TS Statuses -----*/
-#define TS_STATUS_DEENERGIZED 0x00
-#define TS_STATUS_PRECHARGING 0x01
-#define TS_STATUS_ENERGIZED 	0x02
-#define TS_STATUS_DISCHARGING 0x03
+#define TS_STATUS_DEENERGIZED 		0x00
+#define TS_STATUS_PRECHARGE_DELAY 0x01
+#define TS_STATUS_PRECHARGING 		0x02
+#define TS_STATUS_ENERGIZED 			0x03
+#define TS_STATUS_DISCHARGING 		0x04
+#define TS_STATUS_PANIC						0x05
 
 /*----- MOBs -----*/
 #define MOB_BROADCAST_CRITICAL	0 //Broadcasts precharge sequence complete
@@ -108,12 +115,12 @@ ISR(TIMER0_COMPA_vect) {
     MATH: (4MHz/1024)/255 = ~16
     */
 
-	gFlag |= _BV(UPDATE_STATUS);
-	LEDtimer++;
-	if(LEDtimer > 100){
-		LEDtimer = 0;
-		LED_PORT ^= _BV(LED2);
-	}
+		gFlag |= _BV(UPDATE_STATUS);
+		LEDtimer++;
+		if(LEDtimer > 100){
+			LEDtimer = 0;
+			LED_PORT ^= _BV(LED2);
+		}
 }
 
 /*
@@ -156,37 +163,37 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD
 }
 
 ISR(PCINT1_vect) { // PCINT8-15 -> AIRPLUS_AUX, AIRMINUS_AUX, SS_IMD, SS_BMS
-	if(bit_is_set(INREG_AIRS,PIN_AIRPLUS_AUX)){
-	 gFlag |= _BV(FLAG_AIRPLUS_AUX);
-	} else {
-	 gFlag &= ~_BV(FLAG_AIRPLUS_AUX);
-	}
+		if(bit_is_set(INREG_AIRS,PIN_AIRPLUS_AUX)){
+		 gFlag |= _BV(FLAG_AIRPLUS_AUX);
+		} else {
+		 gFlag &= ~_BV(FLAG_AIRPLUS_AUX);
+		}
 
-	if(bit_is_set(INREG_AIRS,PIN_AIRMINUS_AUX)){
-	 gFlag |= _BV(FLAG_AIRMINUS_AUX);
-	} else {
-	 gFlag &= ~_BV(FLAG_AIRMINUS_AUX);
-	}
+		if(bit_is_set(INREG_AIRS,PIN_AIRMINUS_AUX)){
+		 gFlag |= _BV(FLAG_AIRMINUS_AUX);
+		} else {
+		 gFlag &= ~_BV(FLAG_AIRMINUS_AUX);
+		}
 
-	if(bit_is_clear(INREG_SS_IMD,PIN_SS_IMD)){
-	 gFlag |= _BV(FLAG_SS_IMD);
-	} else {
-	 gFlag &= ~_BV(FLAG_SS_IMD);
-	}
+		if(bit_is_clear(INREG_SS_IMD,PIN_SS_IMD)){
+		 gFlag |= _BV(FLAG_SS_IMD);
+		} else {
+		 gFlag &= ~_BV(FLAG_SS_IMD);
+		}
 
-	if(bit_is_clear(INREG_SS_BMS,PIN_SS_BMS)){
-	 gFlag |= _BV(FLAG_SS_BMS);
-	} else {
-	 gFlag &= ~_BV(FLAG_SS_BMS);
-	}
+		if(bit_is_clear(INREG_SS_BMS,PIN_SS_BMS)){
+		 gFlag |= _BV(FLAG_SS_BMS);
+		} else {
+		 gFlag &= ~_BV(FLAG_SS_BMS);
+		}
 }
 
 ISR(PCINT2_vect) { // PCINT16-23 -> SS_MP
-	if(bit_is_clear(INREG_SS_MP,PIN_SS_MP)){
-	 gFlag |= _BV(FLAG_SS_MP);
-	} else {
-	 gFlag &= ~_BV(FLAG_SS_MP);
-	}
+		if(bit_is_clear(INREG_SS_MP,PIN_SS_MP)){
+		 gFlag |= _BV(FLAG_SS_MP);
+		} else {
+		 gFlag &= ~_BV(FLAG_SS_MP);
+		}
 }
 
 void initTimer(void) {
@@ -235,11 +242,11 @@ void checkAIRMINUS (void) {
 }
 
 void conditionalMessageSet (uint8_t reg, uint8_t bit, uint8_t msg[], uint8_t index, uint8_t condHigh, uint8_t condLow) {
-	if(bit_is_set(reg,bit)){
-	 msg[index] = condHigh;
-	} else {
-	 msg[index] = condLow;
-	}
+		if(bit_is_set(reg,bit)){
+		 msg[index] = condHigh;
+		} else {
+		 msg[index] = condLow;
+		}
 }
 
 void sendShutdownSenseCANMessage (void) {
@@ -256,7 +263,7 @@ void sendShutdownSenseCANMessage (void) {
 }
 
 void sendCriticalCANMessage (void) {
-	// TODO -> precharge status, hv check?
+	// TODO -> hv check?
 	conditionalMessageSet(gFlag, FLAG_AIRPLUS_AUX, msgCritical, MSG_INDEX_AIRPLUS_AUX, 0xff, 0x00);
 	conditionalMessageSet(gFlag, FLAG_AIRMINUS_AUX, msgCritical, MSG_INDEX_AIRMINUS_AUX, 0xff, 0x00);
 	CAN_transmit(MOB_BROADCAST_CRITICAL,
@@ -266,6 +273,7 @@ void sendCriticalCANMessage (void) {
 }
 
 void panic (uint8_t fault_code) {
+	tractiveSystemStatus = TS_STATUS_PANIC;
 	uint8_t msg[1] = {fault_code};
 	CAN_transmit(MOB_PANIC,
 								CAN_ID_PANIC,
@@ -277,7 +285,8 @@ int main (void) {
     initTimer();
     sei(); //Inititiates interrupts for the ATMega
     CAN_init(CAN_ENABLED);
-    //CAN_wait_on_receive(0, CAN_ID_TUTORIAL6, CAN_LEN_TUTORIAL6, 0xFF);
+    CAN_wait_on_receive(MOB_MOTORCONTROLLER, CAN_ID_MC_VOLTAGE, CAN_LEN_MC_VOLTAGE, 0xFF);
+		CAN_wait_on_receive(MOB_BRAKELIGHT, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, 0xFF); // TODO add interrupt handling
 
     // Enable interrupt
     PCICR |= _BV(PCIE0) | _BV(PCIE1) | _BV(PCIE2);
@@ -295,16 +304,39 @@ int main (void) {
 				checkAIRMINUS();
 				sendShutdownSenseCANMessage();
 				sendCriticalCANMessage();
-				// TODO -> discharge/precharge faults, actually do precharge
 
 				if(tractiveSystemStatus==TS_STATUS_DEENERGIZED){
-				// if low side is closed, panic, air- weld
+					// if tsms closed
+						// set status to precharge delay
+						// reset timer 2
+						// set timer 2 ovf threshold for precharge delay
+				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGE_DELAY) {
+					// if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
+					// if timer done
+						// set status to precharging
+						// reset timer 2
+						// set timer 2 ovf threshold for precharging
+						// update critical can message to precharge started
+						// close precharge relay
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGING) {
-
+					// if voltage isn't increasing
+						// panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS)
+					// if time is up
+						// if voltage is high enough
+							// close air minus
+							// open precharge relay
+							// set status to energized
+							// update critical can message to precharge complete
+						// if voltage isn't high enough
+							// panic(FAULT_CODE_DISCHARGE_STUCK)
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-
+					// if either air or tsms opens
+						// TODO
 				} else if(tractiveSystemStatus==TS_STATUS_DISCHARGING) {
-
+						// TODO
+				} else if(tractiveSystemStatus==TS_STATUS_PANIC) {
+					// open air minus and precharge
+					// see that panic keeps being sent...
 				}
 
 			}
