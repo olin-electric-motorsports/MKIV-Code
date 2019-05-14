@@ -1,10 +1,8 @@
 /*
- * BMS DEMO TX
- *
- * CAN transmitting code from Tutorial 6. Transmits a CAN message on 0x25 with a 0
- * or 0xFF to turn on or off an LED based on a button state.
+ *  2019 BMS
  *
  * @author Alex Hoppe '19
+ * @author Vienna Scheyer '21
  */
 
 #include <avr/io.h>
@@ -38,7 +36,7 @@ volatile uint8_t gFlag = 0;
 uint8_t gStatusMessage[7];
 
 uint8_t gCounterTransmit = 0;
-const uint8_t transmit_match = 10;
+const uint8_t transmit_match = 200;
 
 char uart_buf[64];
 
@@ -79,14 +77,17 @@ int8_t read_all_voltages(void) // Start Cell ADC Measurement
 {
     int8_t error = 0;
 
-    // Set up ADC
     wakeup_sleep(TOTAL_IC);
-    o_ltc6811_adcv(ADC_CONVERSION_MODE,ADC_DCP,CELL_CH_TO_CONVERT); //TODO write o_ltc6811_adcv()
-    o_ltc6811_pollAdc(); // TODO write o_ltc6811_pollAdc()
+    // Start a cell conversion with dicharge disabled on all cells
+    ltc6811_adcv(MD_7KHZ_3KHZ, DCP_DISABLED, CELL_CH_ALL);
 
-    error = o_ltc6811_rdcv(0,TOTAL_IC, raw_cell_voltages); //Parse ADC measurements //TODO write o_ltc6811_rdcv
+    // wait until ADC is finished
+    ltc6811_pollAdc();
 
-    // 12 16-bit ints
+    //Read back and parse out ADC measurements
+    error = ltc6811_rdcv(TOTAL_IC, raw_cell_voltages);
+
+    // UART out cell voltages as 10  16-bit ints
     for (int i = 0; i < TOTAL_IC; i++) {
         char tmp_msg[108] = "";
         sprintf(tmp_msg, "v%d,%u,%u,%u,%u,%u,"
@@ -108,33 +109,32 @@ int8_t read_all_voltages(void) // Start Cell ADC Measurement
         LOG_println(tmp_msg, strlen(tmp_msg));
     }
 
-    // Do value checking
-    for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
-        for (uint8_t cell = 0; cell < CELL_CHANNELS; cell++) {
-
-            uint16_t cell_value = raw_cell_voltages[ic][cell];
-
-            if (cell_value > OV_THRESHOLD) {
-                FLAGS |= OVER_VOLTAGE;
-            } else if (cell_value > SOFT_OV_THRESHOLD) {
-                FLAGS |= SOFT_OVER_VOLTAGE;
-
-                // :( sad side-effects
-                if (FLAGS & AIRS_CLOSED) {
-                    // IC and Cell are 1-indexed for discharge
-                    enable_discharge(ic + 1, cell + 1);
-                }
-            } else if (cell_value < UV_THRESHOLD) {
-                FLAGS |= UNDER_VOLTAGE;
-            } else {
-                FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE | SOFT_OVER_VOLTAGE);
-            }
-        }
-    }
+    // // Do value checking
+    // for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
+    //     for (uint8_t cell = 0; cell < CELL_CHANNELS; cell++) {
+    //
+    //         uint16_t cell_value = raw_cell_voltages[ic][cell];
+    //
+    //         if (cell_value > OV_THRESHOLD) {
+    //             FLAGS |= OVER_VOLTAGE;
+    //         } else if (cell_value > SOFT_OV_THRESHOLD) {
+    //             FLAGS |= SOFT_OVER_VOLTAGE;
+    //
+    //             // :( sad side-effects
+    //             if (FLAGS & AIRS_CLOSED) {
+    //                 // IC and Cell are 1-indexed for discharge
+    //                 enable_discharge(ic + 1, cell + 1);
+    //             }
+    //         } else if (cell_value < UV_THRESHOLD) {
+    //             FLAGS |= UNDER_VOLTAGE;
+    //         } else {
+    //             FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE | SOFT_OVER_VOLTAGE);
+    //         }
+    //     }
+    // }
 
     return error;
 }
-
 
 int main (void) {
 
@@ -159,6 +159,9 @@ int main (void) {
 
     _delay_us(1000);
 
+    char start_msg[16] = "";
+    sprintf(start_msg, "Anybody home1");
+
 
     while (1) {
         // LED_PORT ^= _BV(LED3_PIN);
@@ -166,13 +169,7 @@ int main (void) {
         if (gFlag & TRANSMIT_STATUS) {
             gFlag &= ~TRANSMIT_STATUS;
 
-            // Test LTC6820
-            // wakeup_sleep(TOTAL_IC);
-            uint8_t dat;
-            SPI_start();
-            SPI_transfer(0xFF, &dat);
-            // _delay_us(100);
-            SPI_end();
+            read_all_voltages();
 
 
             LED_PORT ^= _BV(LED2_PIN);

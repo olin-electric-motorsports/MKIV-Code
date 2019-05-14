@@ -58,6 +58,12 @@ void SPI_transfer(uint8_t txdata, uint8_t *rxdata) {
     *rxdata = SPDR;
 }
 
+void SPI_transfer_array(uint8_t *txdata, uint8_t *rxdata, uint8_t len) {
+    for (uint8_t i = 0; i < len; i++) {
+        SPI_transfer(txdata[i], &rxdata[i]);
+    }
+}
+
 void SPI_end() {
     // Raise the CS pin
     *gSPI_cs_port |= _BV(gSPI_cs_pin);
