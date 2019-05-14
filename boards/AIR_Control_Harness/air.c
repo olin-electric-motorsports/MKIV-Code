@@ -56,6 +56,7 @@
 #define FAULT_CODE_PRECHARGE_CONTROL_LOSS			0X08;
 #define FAULT_CODE_DISCHARGE_STUCK						0X09; // unused because of difficulty of detection
 #define FAULT_CODE_DISCHARGE_CONTROL_LOSS			0X0A;
+#define FAULT_CODE_PRECHARGE_INCOMPLETE				0X0B; // if precharge is too slow or stopping below MINIMUM_VOLTAGE_AFTER_PRECHARGE
 
 /*----- gFlag -----*/
 #define UPDATE_STATUS       0
@@ -87,7 +88,7 @@
 #define MOB_PANIC 							2 // Panic MOB for BMS to open shutdown circuit
 #define MOB_BROADCAST_SS				3
 #define	MOB_BRAKELIGHT					4
-#define	MOB_IBH									5
+#define	MOB_IBH									5 // TODO change this to panic message? probably should listen for panics
 
 /*----- Overflow Counts for TS Status Delays -----*/
 #define OVF_COUNT_PRECHARGE_DELAY		0x17 // roughly 3 seconds per FMEA
@@ -377,6 +378,8 @@ int main (void) {
 									tractiveSystemStatus = TS_STATUS_ENERGIZED; // set status to energized
 									msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0xff; // update critical can message to precharge complete
 								}
+							} else {
+								panic(FAULT_CODE_PRECHARGE_INCOMPLETE);
 							}
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
