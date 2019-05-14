@@ -44,29 +44,28 @@
 #define PRECHARGE                    1
 #define BRAKE_PRESSED                2
 #define READY                        3
+#define LEZGOOOO                     4
 
-// uint8_t msg[1];
+uint8_t msg[1]= {0};
 volatile uint8_t gFlag = 0x00;  // Global Flag
 volatile uint8_t gTimerFlag = 0x01; // Timer Flag
 int count = 0;
 uint8_t can_recv_msg[8] = {};
+uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 ISR(PCINT0_vect) {
-
     /* If button is pressed, turn the light on */
     if (bit_is_clear(PINB, PINOUT_1)) {
-        // PORTB &= ~_BV(LED2_OUT);
+        gCAN_MSG[0] = 0x00;
         PORTD &= ~_BV(LED2_PIN);
     } else {
-        // PORTB |= _BV(LED2_OUT);
+        gCAN_MSG[0] = 0xFF;
         PORTD |= _BV(LED2_PIN);
     }
 }
 
 /*----- Interrupt(s) -----*/
 ISR(CAN_INT_vect) {
-
-
     CANPAGE = (MBOX_1 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
         can_recv_msg[0] = CANMSG;   // brake analog voltage MSB
@@ -77,16 +76,19 @@ ISR(CAN_INT_vect) {
         can_recv_msg[5] = CANMSG;   // left_e_stop
         can_recv_msg[6] = CANMSG;   // GLVMS sense      //grab the first byte of the CAN message
 
-        if(can_recv_msg[0]  == 0xFF) {// TODO FIX THIS ITS WRONG
+        if(count == 0 && can_recv_msg[2]  == 0xFF) {
             PORTB |= _BV(LED1_OUT);
             gFlag |= _BV(BRAKE_PRESSED);
+        }
+        else if(can_recv_msg[2] == 0x00) {
+            PORTB &= ~_BV(LED1_OUT);
+            gFlag &= ~_BV(BRAKE_PRESSED);
         }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        if(count <= 0 ){
-            CAN_wait_on_receive(MBOX_1, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
-        }
+        CAN_wait_on_receive(MBOX_1, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
+
     }
     CANPAGE = (MBOX_2 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
@@ -94,33 +96,48 @@ ISR(CAN_INT_vect) {
         can_recv_msg[1] = CANMSG;   // High Side AIR
         can_recv_msg[2] = CANMSG;   // Low Side AIR
         can_recv_msg[3] = CANMSG;   // HV Check
-        can_recv_msg[4] = CANMSG;   // Debugging
+        // can_recv_msg[4] = CANMSG;   // Debugging
 
-        if(can_recv_msg[0] == 0xFF) {
+        if(count == 0 && can_recv_msg[0] == 0xFF) {
             PORTB |= _BV(LED2_OUT);
             gFlag |= _BV(PRECHARGE);
         }
+        else if(can_recv_msg[0] == 0x00) {
+            PORTB &= ~_BV(LED2_OUT);
+            gFlag &= ~_BV(PRECHARGE) & ~_BV(BRAKE_PRESSED) & ~_BV(READY);
+            count = 0;
+        }
+
+        // if(can_recv_msg[0] == 0xFF) {
+        //     PORTD |= _BV(LED1_PIN);
+        // }
+        // else if(can_recv_msg[0] == 0x00) {
+        //     PORTD &= ~_BV(LED1_PIN);
+        // }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        if(count <= 0 ){
-            CAN_wait_on_receive(MBOX_2, CAN_ID_AIR_CONTROL_CRITICAL, CAN_LEN_AIR_CONTROL_CRITICAL, CAN_MSK_SINGLE);
-        }
+        CAN_wait_on_receive(MBOX_2, CAN_ID_AIR_CONTROL_CRITICAL, CAN_LEN_AIR_CONTROL_CRITICAL, CAN_MSK_SINGLE);
+
     }
     CANPAGE = (MBOX_3 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
-        volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
+        can_recv_msg[0] = CANMSG;
+        can_recv_msg[1] = CANMSG;
+        can_recv_msg[2] = CANMSG;       //grab the first byte of the CAN message
 
-        if(msg == 0xFF) {
+        if(count == 0 && can_recv_msg[0] == 0xFF) {
             PORTB |= _BV(LED3_OUT);
-            gFLag |= _BV(READY);
+            gFlag |= _BV(READY);
+        }
+        else if(can_recv_msg[0] == 0x00) {
+            PORTB &= ~_BV(LED3_OUT);
+            gFlag &= ~_BV(READY);
         }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        if(count <= 0 ){
-          CAN_wait_on_receive(MBOX_3, CAN_ID_DASHBOARD CAN_LEN_DASHBOARD, CAN_MSK_GLOBAL);
-        }
+        CAN_wait_on_receive(MBOX_3, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, CAN_MSK_SINGLE);
     }
 }
 
@@ -139,14 +156,12 @@ void initTimer(void) {
     OCR0A = 0xFF;
 }
 
-
 int main (void) {
 
     /* Set the data direction register so the led pin is output */
     DDRB |= _BV(LED1_OUT) | _BV(LED2_OUT) | _BV(LED3_OUT) | _BV(PINOUT_2);
     DDRD |= _BV(LED1_PIN) | _BV(LED2_PIN) | _BV(LED3_PIN);
 
-    /* Set up input pin with pull-up resistor */
     DDRB &= ~_BV(PINOUT_1);     /* Sanity check pin to input */
 
     sei();
@@ -155,47 +170,51 @@ int main (void) {
     PCICR |= _BV(PCIE0);
     PCMSK0 |= _BV(PINOUT_1);
 
-
-
     /* Initialize CAN */
     CAN_init(CAN_ENABLED);
 
-    // LOG_init();
+    // // LOG_init();
     CAN_wait_on_receive(MBOX_1, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
     CAN_wait_on_receive(MBOX_2, CAN_ID_AIR_CONTROL_CRITICAL, CAN_LEN_AIR_CONTROL_CRITICAL, CAN_MSK_SINGLE);
-    CAN_wait_on_receive(MBOX_3, CAN_ID_DASHBOARD CAN_LEN_DASHBOARD, CAN_MSK_GLOBAL);
-
-    // PORTB ^= _BV(LED1_OUT);
-    // PORTB ^= _BV(LED2_OUT);
-    // PORTB ^= _BV(LED3_OUT);
+    CAN_wait_on_receive(MBOX_3, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, CAN_MSK_GLOBAL);
 
     while (1) {
-      PORTB |= _BV(LED1_OUT);
-      PORTB |= _BV(LED2_OUT);
-      PORTB |= _BV(LED3_OUT);
+        if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
+            // Check Timer
+            gTimerFlag &= ~_BV(UPDATE_STATUS);
+            // PORTD ^= _BV(LED3_PIN);
+            // PORTD ^= _BV(LED2_PIN);
+            // PORTD ^= _BV(LED1_PIN);
+            // PORTB ^= _BV(LED1_OUT);
+            // PORTB ^= _BV(LED2_OUT);
+            // PORTB ^= _BV(LED3_OUT);
 
-      if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
-        // Check Timer
-        gTimerFlag &= ~_BV(UPDATE_STATUS);
-        PORTD ^= _BV(LED3_PIN);
+            /* If button is pressed, turn the light on */
+            // if (bit_is_clear(PINB, PINOUT_1)) {
+            //     msg[0] = 0x00;
+            // } else {
+            //     msg[0] = 0xFF;
+            // }
+            CAN_transmit(MBOX_0, CAN_ID_STEERING_WHEEL, CAN_LEN_STEERING_WHEEL, gCAN_MSG);
+            if(bit_is_set(gFlag,PRECHARGE) && bit_is_set(gFlag,BRAKE_PRESSED) && bit_is_set(gFlag,READY)){
+                count = 1;
+                PORTD ^= _BV(LED1_PIN);
+            }
+            if (count > 0 && count < 50){
+                // PORTD ^= _BV(LED3_PIN);
+                PORTB ^= _BV(LED1_OUT);
+                PORTB ^= _BV(LED2_OUT);
+                PORTB ^= _BV(LED3_OUT);
+                count ++;
+            }
+            if(count > 50){
 
-        /* If button is pressed, turn the light on */
-        if (bit_is_clear(PINB, PINOUT_1)) {
-            msg[0] = 0x00;
-        } else {
-            msg[0] = 0xFF;
+                PORTB &= ~_BV(LED1_OUT);
+                PORTB &= ~_BV(LED2_OUT);
+                PORTB &= ~_BV(LED3_OUT);
+                gFlag &= ~_BV(PRECHARGE) & ~_BV(BRAKE_PRESSED) & ~_BV(READY);
+
+            }
         }
-        CAN_transmit(0, CAN_ID_DEMO_0, CAN_LEN_DEMO_0, msg);
-        if(gFlag == 0b00000111){
-            count ++;
-        }
-        if(count > 100){
-            PORTB &= ~_BV(LED1_OUT);
-            PORTB &= ~_BV(LED2_OUT);
-            PORTB &= ~_BV(LED3_OUT);
-
-        }
-      }
-
     }
 }

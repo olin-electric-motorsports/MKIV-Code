@@ -17,10 +17,12 @@
 #define CAN_ID_DASHBOARD         ((uint16_t) 0x0F)
 #define CAN_ID_BMS_CORE        ((uint16_t) 0x10)
 
-#define CAN_ID_BMS_TEMP          ((uint16_t) 0x12)
+// #define CAN_ID_BMS_TEMP          ((uint16_t) 0x12)
+#define CAN_ID_STEERING_WHEEL    ((uint16_t) 0x12)
 #define CAN_ID_BMS_VOLT          ((uint16_t) 0x13)
 #define CAN_ID_BMS_DISCHARGE     ((uint16_t) 0x14)
 #define CAN_ID_MOTORCONTROLLER   ((uint16_t) 0x15)
+#define CAN_ID_STEERING_WHEEL    ((uint16_t) 0x12)
 
 #define CAN_ID_MC_POSITION       ((uint16_t) 0xA5)
 #define CAN_ID_MC_CURRENT        ((uint16_t) 0xA6)
@@ -43,10 +45,11 @@
 #define CAN_LEN_DASHBOARD       ((uint16_t) 3)
 #define CAN_LEN_BMS_CORE        ((uint16_t) 7)
 
-#define CAN_LEN_BMS_TEMP        ((uint16_t) 8)
+// #define CAN_LEN_BMS_TEMP        ((uint16_t) 8)
 #define CAN_LEN_BMS_VOLT        ((uint16_t) 8)
 #define CAN_LEN_BMS_DISCHARGE   ((uint16_t) 8)
 #define CAN_LEN_MOTORCONTROLLER ((uint16_t) 8)
+#define CAN_LEN_STEERING_WHEEL  ((uint16_t) 1)
 
 #define CAN_LEN_MC_POSITION     ((uint16_t) 8)
 #define CAN_LEN_MC_CURRENT      ((uint16_t) 8)
