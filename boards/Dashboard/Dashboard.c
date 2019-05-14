@@ -5,6 +5,8 @@ Header:
             : Start Button + corresponding LED - Final Check before entering RTD
             : Interface with LED Bars Board
 
+    TODO: IMPLEMENT POWER CYCLE LOGIC
+
 Author:
     Aditya Sudhakar
     asudhakar@olin.edu
@@ -25,9 +27,9 @@ Author:
 /*----- Macro Definitions -----*/
 
 // LEDs
-#define DEBUG_LED1                         PB4
-#define DEBUG_LED2                         PB5
-#define DEBUG_LED3                         PB6
+#define DEBUG_LED1                         PB5
+#define DEBUG_LED2                         PB6
+#define DEBUG_LED3                         PB7
 
 #define RJ_LED1                            PB0
 #define RJ_LED2                            PB1
@@ -80,10 +82,11 @@ Author:
 // gFlag positions
 #define STATUS_START                       1
 #define BRAKE_PRESSED                      2
-#define TSMS_CLOSED                        3
+#define BUZZED                             3
 #define BMS_LIGHT                          4
 #define IMD_STATUS                         5
 #define PRECHARGE                          6
+#define RTD_STATUS                         7
     
 
 #define UPDATE_STATUS                      0
@@ -91,7 +94,6 @@ Author:
 
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
-volatile uint8_t gBuzz = 0x00;  // Global Flag for Buzzer
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 uint8_t can_recv_msg[8] = {};
 
@@ -128,13 +130,8 @@ ISR(CAN_INT_vect) {
 
         if(can_recv_msg[2] == 0xFF) {
             gFlag |= _BV(BRAKE_PRESSED);           //trip flag
-            gBuzz |= 0b00000010;
-        } 
-
-        if(can_recv_msg[4] == 0xFF) {
-            gFlag |= _BV(TSMS_CLOSED);
         } else {
-            gFlag &= ~_BV(TSMS_CLOSED);
+            gFlag &= ~_BV(BRAKE_PRESSED);
         }
 
         //Setup to Receive Again
@@ -200,8 +197,10 @@ ISR(CAN_INT_vect) {
 
       if(can_recv_msg[0] == 0xFF){
           gFlag |= _BV(PRECHARGE);
-          gBuzz |= 0b00000001;
-      }
+      } 
+      // else {
+      //       gFlag &= ~_BV(PRECHARGE);
+      // }
 
 
       // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
@@ -310,7 +309,6 @@ void checkShutdownState(void)   {
     // Check Start Button
     if(bit_is_set(gFlag, STATUS_START)) {
         gCAN_MSG[CAN_START_BUTTON] = 0xFF;
-        gBuzz |= 0b00000100;
     }
 }
 
@@ -328,16 +326,6 @@ void updateStateFromFlags(void) {
     if((bit_is_set(gFlag, IMD_STATUS))) {
         PORT_IMD_LED |= _BV(IMD_LED);
     }
-
-    // Check if Buzzer is ready to Buzz
-    if(gBuzz == 0b00000111){              //Start Button Status, Brakes, Precharge
-        RTD_PORT |= _BV(RTD_LD);
-        _delay_ms(400);
-        RTD_PORT &= ~(_BV(RTD_LD));
-        PORT_START_LED |= _BV(START_LED);
-
-        gBuzz = 0b00000000;               //Ready to buzz again if necessary
-      }
 }
 
 void initADC(void) {
@@ -383,40 +371,55 @@ int main(void){
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
 
-    // RTD_PORT |= _BV(RTD_LD);
-    // _delay_ms(400); 
-    // RTD_PORT &= ~(_BV(RTD_LD));
-
     while(1) {
 
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag    
 
-            PORT_RJ_LED1 ^= _BV(RJ_LED1); //Blink Orange LED for timing check
-
             PORT_START_LED ^= _BV(START_LED);
+
+            PORT_DEBUG_LED1 ^= _BV(DEBUG_LED1);
 
             updateStateFromFlags();
             checkShutdownState();
 
 
-            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
-            // if(bit_is_set(gFlag,STATUS_START)) {
+            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_clear(gFlag,STATUS_START)) {
+            //if(bit_is_set(gFlag,STATUS_START)) {
                 gCAN_MSG[0] = 0xFF;
+                PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
                 CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
-                PORTB |= _BV(PB6);     // Blink Middle of 3 Debug LEDs for check
 
-            } else{
-                PORTB &= ~_BV(PB6);
                 RTD_PORT |= _BV(RTD_LD);
                 _delay_ms(400);
-                RTD_PORT &= ~(_BV(RTD_LD));                
+                RTD_PORT &= ~(_BV(RTD_LD)); 
             }
+
+
+            // } else{
+               
+            // }
 
 
             if(bit_is_set(gFlag, BRAKE_PRESSED)) {
-                PORT_RJ_LED2 |= _BV(RJ_LED2);
+                PORT_RJ_LED1 |= _BV(RJ_LED1);
+            } else{
+                PORT_RJ_LED1 &= ~_BV(RJ_LED1);
             }
+
+            if(bit_is_set(gFlag, PRECHARGE)) {
+                PORT_RJ_LED2 |= _BV(RJ_LED2);
+            } else{
+                PORT_RJ_LED2 &= ~_BV(RJ_LED2);
+            }
+
+            if(bit_is_set(gFlag, STATUS_START)) {
+                PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
+            } else{
+                PORT_DEBUG_LED3 &= ~_BV(DEBUG_LED3);
+            }
+
+
 
         }
 
