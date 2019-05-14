@@ -45,16 +45,17 @@
 #define INREG_SS_BMS			 PINC
 
 /*----- Fault Codes -----*/
-#define FAULT_CODE_BMS_IMPLAUSIBILITY 				0x00;
-#define FAULT_CODE_IMD_IMPLAUSIBILITY 				0x01;
-#define FAULT_CODE_AIRPLUS_WELD 							0x02;
-#define FAULT_CODE_AIRMINUS_WELD		 					0x03;
-#define FAULT_CODE_AIRPLUS_CONTROL_LOSS 			0x04;
-#define FAULT_CODE_AIRMINUS_CONTROL_LOSS 			0x05;
-#define FAULT_CODE_PRECHARGE_STUCK						0X06;
-#define FAULT_CODE_PRECHARGE_CONTROL_LOSS			0X07;
-#define FAULT_CODE_DISCHARGE_STUCK						0X08;
-#define FAULT_CODE_DISCHARGE_CONTROL_LOSS			0X09;
+#define FAULT_CODE_GENERAL										0X00;
+#define FAULT_CODE_BMS_IMPLAUSIBILITY 				0x01;
+#define FAULT_CODE_IMD_IMPLAUSIBILITY 				0x02;
+#define FAULT_CODE_AIRPLUS_WELD 							0x03;
+#define FAULT_CODE_AIRMINUS_WELD		 					0x04;
+#define FAULT_CODE_AIRPLUS_CONTROL_LOSS 			0x05;
+#define FAULT_CODE_AIRMINUS_CONTROL_LOSS 			0x06;
+#define FAULT_CODE_PRECHARGE_STUCK						0X07;
+#define FAULT_CODE_PRECHARGE_CONTROL_LOSS			0X08;
+#define FAULT_CODE_DISCHARGE_STUCK						0X09;
+#define FAULT_CODE_DISCHARGE_CONTROL_LOSS			0X0A;
 
 
 /*----- gFlag -----*/
@@ -92,6 +93,7 @@
 volatile uint8_t gFlag = 0x00; // Global Flag
 volatile uint8_t sFlag = 0x00; // Shutdown Sense Flag
 volatile uint8_t LEDtimer = 0x00;
+volatile uint8_t motorControllerVoltage = 0x00;
 extern uint8_t tractiveSystemStatus = 0; //
 
 uint8_t msgCritical[4] = {0,0,0,0};
@@ -306,37 +308,55 @@ int main (void) {
 				sendCriticalCANMessage();
 
 				if(tractiveSystemStatus==TS_STATUS_DEENERGIZED){
-					// if tsms closed
-						// set status to precharge delay
+					if(bit_is_set(gFlag, FLAG_TSMS_STATUS)){ // if tsms closed
+						tractiveSystemStatus = TS_STATUS_PRECHARGE_DELAY; // set status to precharge delay
 						// reset timer 2
 						// set timer 2 ovf threshold for precharge delay
+					}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGE_DELAY) {
-					// if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
+					if(motorControllerVoltage > 0){ // if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
+						panic(FAULT_CODE_PRECHARGE_STUCK);
+					}
 					// if timer done
-						// set status to precharging
+						tractiveSystemStatus = TS_STATUS_PRECHARGING; // set status to precharging
 						// reset timer 2
 						// set timer 2 ovf threshold for precharging
-						// update critical can message to precharge started
-						// close precharge relay
+						msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x0f; // update critical can message to precharge started
+						PRECHARGE_PORT |= _BV(PRECHARGE_CTRL); // close precharge relay
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGING) {
-					// if voltage isn't increasing
-						// panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS)
 					// if time is up
 						// if voltage is high enough
-							// close air minus
-							// open precharge relay
-							// set status to energized
-							// update critical can message to precharge complete
+							AIRMINUS_PORT |= _BV(AIRMINUS_CTRL); // close air minus
+							checkAIRMINUS(); // confirm closure
+							PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
+							if (tractiveSystemStatus != TS_STATUS_PANIC){ // if we passed AIR minus check
+								tractiveSystemStatus = TS_STATUS_ENERGIZED; // set status to energized
+								msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0xff; // update critical can message to precharge complete
+							}
+						if(motorControllerVoltage == 0){ // if voltage is 0
+							panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS); // panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS)
+						}
 						// if voltage isn't high enough
 							// panic(FAULT_CODE_DISCHARGE_STUCK)
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-					// if either air or tsms opens
-						// TODO
+					if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){ // if tsms node no longer has shutdown voltage
+						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
+						msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
+						tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
+						// reset timer 2
+						// set timer 2 ovf threshold for discharging
+					}
 				} else if(tractiveSystemStatus==TS_STATUS_DISCHARGING) {
-						// TODO
+					// if time is up
+						if(motorControllerVoltage == 0){ // if voltage is 0
+							tractiveSystemStatus = TS_STATUS_DEENERGIZED; // set status to deenergized
+						} else { // else
+							panic(FAULT_CODE_DISCHARGE_STUCK); // panic(FAULT_CODE_DISCHARGE_CONTROL_LOSS)
+						}
 				} else if(tractiveSystemStatus==TS_STATUS_PANIC) {
-					// open air minus and precharge
-					// see that panic keeps being sent...
+					AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus and precharge
+					PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
+					panic(FAULT_CODE_GENERAL); // see that panic keeps being sent...
 				}
 
 			}
