@@ -1,6 +1,6 @@
 /*
 Header:
-    This is the functional code for the dashboard-right board. 
+    This is the functional code for the dashboard-right board.
     Function: Responsible for IMD and BMS LED indicators - get info from those boards
             : Start Button + corresponding LED - Final Check before entering RTD
             : Interface with LED Bars Board
@@ -49,7 +49,7 @@ Author:
 
 #define IMD_LED                            PB3
 #define PORT_IMD_LED                       PORTB
-    
+
 
 
 // Start Button Status + LED
@@ -87,7 +87,7 @@ Author:
 #define IMD_STATUS                         5
 #define PRECHARGE                          6
 #define RTD_STATUS                         7
-    
+
 
 #define UPDATE_STATUS                      0
 
@@ -197,10 +197,12 @@ ISR(CAN_INT_vect) {
 
       if(can_recv_msg[0] == 0xFF){
           gFlag |= _BV(PRECHARGE);
-      } 
-      // else {
-      //       gFlag &= ~_BV(PRECHARGE);
-      // }
+      }
+      else {
+          gFlag &= ~_BV(PRECHARGE);
+          gFlag &= ~_BV(STATUS_START);
+          gCAN_MSG[0] = 0x00;
+      }
 
 
       // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
@@ -234,7 +236,7 @@ ISR(CAN_INT_vect) {
 
 ISR(PCINT1_vect) {
 
-    if(bit_is_set(PINC,START_PIN)) {
+    if(bit_is_clear(PINC,START_PIN)) { //Pull up resistor. Therefore this should be bit is clear
         gFlag |= _BV(STATUS_START);
         PORT_DEBUG_LED2 |= _BV(DEBUG_LED2);
     } else {
@@ -303,24 +305,13 @@ void initIO(void) {
 
 }
 
-void checkShutdownState(void)   {
-    /*
-    -Check if bits are set
-        -IF they are, set CAN list position to 0xFF
-        -ELSE do set CAN list position to 0x00
-    */
-    
-    // Check Start Button
-    if(bit_is_set(gFlag, STATUS_START)) {
-        gCAN_MSG[CAN_START_BUTTON] = 0xFF;
-    }
-}
+
 
 void updateStateFromFlags(void) {
     /*
     Based off the state of the flag(s), update components and send CAN
     */
-    
+
     // Check BMS light
     if((bit_is_set(gFlag, BMS_LIGHT))) {
         PORT_BMS_LED |= _BV(BMS_LED);
@@ -363,7 +354,7 @@ int main(void){
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
-    
+
     // CBN Enable
     CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
     CAN_wait_on_receive(BMS_CORE_MBOX, CAN_ID_BMS_CORE, CAN_LEN_BMS_CORE, CAN_MSK_SINGLE);
@@ -373,40 +364,41 @@ int main(void){
 
     initTimer();                        // Initialize Timer
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
-    
+
     PORT_START_LED |= _BV(START_LED);
+
+
 
     while(1) {
 
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
-            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag    
+            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
 
             PORT_DEBUG_LED1 ^= _BV(DEBUG_LED1);
 
             updateStateFromFlags();
-            checkShutdownState();
 
             CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
 
 
 
-            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_clear(gFlag,STATUS_START)) {
+            if(bit_is_clear(gCAN_MSG,CAN_READY_TO_DRIVE) && bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
             //if(bit_is_set(gFlag,STATUS_START)) {
                 gCAN_MSG[0] = 0xFF;
                 PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
 
                 RTD_PORT |= _BV(RTD_LD);
                 _delay_ms(400);
-                RTD_PORT &= ~(_BV(RTD_LD)); 
+                RTD_PORT &= ~(_BV(RTD_LD));
 
-                if(bit_is_clear(gFlag, PRECHARGE)){
-                  gCAN_MSG[0] = 0x00;
-                }
+                // if(bit_is_clear(gFlag, PRECHARGE)){
+                //   gCAN_MSG[0] = 0x00;
+                // }
             }
 
 
             // } else{
-               
+
             // }
 
 
@@ -431,7 +423,7 @@ int main(void){
 
 
         }
-        
+
 
     }
 }
