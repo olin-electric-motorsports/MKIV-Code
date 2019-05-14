@@ -93,7 +93,7 @@
 volatile uint8_t gFlag = 0x00; // Global Flag
 volatile uint8_t sFlag = 0x00; // Shutdown Sense Flag
 volatile uint8_t LEDtimer = 0x00;
-volatile uint8_t motorControllerVoltage = 0x00;
+volatile uint16_t motorControllerVoltage = 0x0000;
 extern uint8_t tractiveSystemStatus = 0; //
 
 uint8_t msgCritical[4] = {0,0,0,0};
@@ -124,25 +124,6 @@ ISR(TIMER0_COMPA_vect) {
 			LED_PORT ^= _BV(LED2);
 		}
 }
-
-/*
-ISR(CAN_INT_vect) {
-    CANPAGE = (MOB_AIR_CRIT << MOBNB0); // Switch to MOb 0, the one we're listening on.
-    if(bit_is_set(CANSTMOB, RXOK)) {
-        volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
-
-        if(msg == 0xFF) {
-            PORTB |= _BV(LED2_PIN);
-        } else {
-            PORTB &= ~_BV(LED2_PIN);
-        }
-
-        m//Setup to Receive Again
-        CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_TUTORIAL6, CAN_LEN_TUTORIAL6, 0xFF);
-    }
-}
-*/
 
 ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD
     if(bit_is_set(INREG_BMS_STATUS,PIN_BMS_STATUS)){
@@ -198,13 +179,52 @@ ISR(PCINT2_vect) { // PCINT16-23 -> SS_MP
 		}
 }
 
-void initTimer(void) {
+ISR(CAN_INT_vect) {
+		CANPAGE = (MOB_MOTORCONTROLLER << MOBNB0);
+	  if (bit_is_set(CANSTMOB,RXOK)) {
+	      uint8_t msgMC[2];
+	      msgMC[0] = CANMSG;
+	      msgMC[1] = CANMSG;
+
+	      motorControllerVoltage = msg[0] | (msg[1]<<8);
+
+	      CANSTMOB = 0x00;
+	      CAN_wait_on_receive(MOB_MOTORCONTROLLER,
+	                          CAN_ID_MC_VOLTAGE,
+	                          CAN_LEN_MC_VOLTAGE,
+	                          CAN_MSK_SINGLE);
+	  }
+		CANPAGE = (MOB_BRAKELIGHT << MOBNB0);
+	  if (bit_is_set(CANSTMOB,RXOK)) {
+	      uint8_t msgBL[5];
+	      msgBL[0] = CANMSG; msgBL[1] = CANMSG; msgBL[2] = CANMSG; msgBL[3] = CANMSG; // increment CANMSG to get to TSMS info
+				msgBL[4] = CANMSG; // TSMS sense
+
+	      if(msgBL[4]==0xff){
+					gFlag |= _BV(FLAG_TSMS_STATUS);
+				} else {
+					gFlag &= ~_BV(FLAG_TSMS_STATUS);
+				}
+
+	      CANSTMOB = 0x00;
+	      CAN_wait_on_receive(MOB_BRAKELIGHT,
+	                          CAN_ID_BRAKE_LIGHT,
+	                          CAN_LEN_BRAKE_LIGHT,
+	                          CAN_MSK_SINGLE);
+	  }
+}
+
+void initTimer1(void) {
     TCCR0A = _BV(WGM01);    // Set up 8-bit timer in CTC mode
     TCCR0B = 0x05;          // clkio/1024 prescaler
     TIMSK0 |= _BV(OCIE0A);  // Every 1024 cycles, OCR0A increments
     OCR0A = 0x27; //dec 39  // until 0xff, 255, which then calls for
                             // the TIMER0_COMPA_vect interrupt
 			    // currently running at 100Hz
+}
+
+void initTimer2(void) {
+		// TODO
 }
 
 void setOutputs(void) {
@@ -241,6 +261,10 @@ void checkAIRMINUS (void) {
 		} else if ( bit_is_set(AIRMINUS_PORT, AIRMINUS_CTRL) && bit_is_clear(gFlag, FLAG_AIRMINUS_AUX) ) {
 			panic(FAULT_CODE_AIRMINUS_CONTROL_LOSS);
 		}
+}
+
+void updateCoolingPressure (void) { // TODO where is this going in CAN?
+		// TODO
 }
 
 void conditionalMessageSet (uint8_t reg, uint8_t bit, uint8_t msg[], uint8_t index, uint8_t condHigh, uint8_t condLow) {
@@ -284,11 +308,11 @@ void panic (uint8_t fault_code) {
 }
 
 int main (void) {
-    initTimer();
+    initTimer1();
     sei(); //Inititiates interrupts for the ATMega
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(MOB_MOTORCONTROLLER, CAN_ID_MC_VOLTAGE, CAN_LEN_MC_VOLTAGE, 0xFF);
-		CAN_wait_on_receive(MOB_BRAKELIGHT, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, 0xFF); // TODO add interrupt handling
+    CAN_wait_on_receive(MOB_MOTORCONTROLLER, CAN_ID_MC_VOLTAGE, CAN_LEN_MC_VOLTAGE, CAN_MSK_SINGLE);
+		CAN_wait_on_receive(MOB_BRAKELIGHT, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
 
     // Enable interrupt
     PCICR |= _BV(PCIE0) | _BV(PCIE1) | _BV(PCIE2);
