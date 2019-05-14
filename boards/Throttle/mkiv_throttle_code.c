@@ -81,6 +81,8 @@
 
 #define UPDATE_STATUS 1
 
+#define ADC_ERROR 8
+
 //********************Global variables***************
 uint8_t gFlag = 0;
 uint8_t gTimerFlag = 0;
@@ -102,10 +104,10 @@ uint8_t gError = 0b00000000;
 1 = Drive mode error
 */
 
-uint8_t gThrottle1Voltage = 0;
-uint8_t gThrottle2Voltage = 0;
-uint8_t gThrottle1In = 0;
-uint8_t gThrottle2In = 0;
+uint16_t gThrottle1Voltage = 0;
+uint16_t gThrottle2Voltage = 0;
+uint16_t gThrottle1In = 0;
+uint16_t gThrottle2In = 0;
 uint8_t gThrottle1Out = 0;
 uint8_t gThrottle2Out = 0;
 
@@ -116,15 +118,14 @@ uint16_t gRollingSum = 0;
 uint8_t gThrottleOut = 0;
 
 // Throttle mapping values
-// NEEDS TO BE SET ACCORDING TO READ VALUES AFTER CENTERING
-//Values set last on March 30th by Alex (BASED ON TESTING POTS)
-const uint8_t throttle1_HIGH = 255;
-const uint8_t throttle1_LOW = 0;
-const uint8_t throttle2_HIGH = 255;
-const uint8_t throttle2_LOW = 0;
+//Values set last on May 12 by Alex Wenstrup
+const uint16_t throttle1_HIGH = 645;
+const uint16_t throttle1_LOW = 159;
+const uint16_t throttle2_HIGH = 1015;
+const uint16_t throttle2_LOW = 246;
 
 uint8_t throttle10Counter = 0;
-const uint8_t throttle10Ticks = 10; //number of measurements that corespond to an implausibility error
+const uint8_t throttle10Ticks = 4; //number of measurements that corespond to an implausibility error
 
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t gCANMotorController[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -142,7 +143,7 @@ ISR(TIMER0_COMPA_vect) {
     */
 
     clock_prescale++;
-    if(clock_prescale>0) {
+    if(clock_prescale>3) {
         gTimerFlag |= _BV(UPDATE_STATUS);
         clock_prescale = 0;
     }
@@ -217,19 +218,19 @@ ISR(PCINT0_vect) {
     Checks if the shutdown circuit
     nodes are open or closed, and sets flags accordingly
     */
-    if(bit_is_set(PINB,SS_IS)){
+    if(bit_is_clear(PINB,SS_IS)){
         gFlag |= _BV(FLAG_IS);
     } else {
         gFlag &= ~_BV(FLAG_IS);
     }
 
-    if(bit_is_set(PINB,SS_ESTOP)){
+    if(bit_is_clear(PINB,SS_ESTOP)){
         gFlag |= _BV(FLAG_ESTOP);
     } else {
         gFlag &= ~_BV(FLAG_ESTOP);
     }
 
-    if(bit_is_set(PINB,SS_BOTS)){
+    if(bit_is_clear(PINB,SS_BOTS)){
         gFlag |= _BV(FLAG_BOTS);
     } else {
         gFlag &= ~_BV(FLAG_BOTS);
@@ -241,15 +242,15 @@ void initTimer(void) {
     // Set up 8-bit timer in CTC mode
     TCCR0A = _BV(WGM01);
 
-    // Set clock prescaler to (1/256) - page 89
-    TCCR0B = 0b100;
+    // Set clock prescaler to (1/1024) - page 89
+    TCCR0B = 0b101;
 
     // Enable Match A interupts - page 90
     TIMSK0 |= _BV(OCIE0A);
 
-    //Makes the timer reset everytime it hits 255
+    //Makes the timer reset everytime it hits 64 (~64 Hz)
     // - page 90
-    OCR0A = 0xFF;
+    OCR0A = 64;
 }
 
 void initADC(void) {
@@ -266,6 +267,22 @@ void initADC(void) {
     //Reads by default from ADC0 (pin 11)
     //This line is redundant. The timer
     ADMUX |= _BV(0x00);
+}
+
+void initMC(void) {
+  gCANMotorController[0] = 0;
+  gCANMotorController[1] = 0;
+  gCANMotorController[2] = 0;
+  gCANMotorController[3] = 0;
+  gCANMotorController[4] = 1;
+  gCANMotorController[5] = 0;
+  gCANMotorController[6] = 0;
+  gCANMotorController[7] = 0;
+
+  CAN_transmit(MOB_MOTORCONTROLLER,
+               CAN_ID_MC_COMMAND,
+               CAN_LEN_MC_COMMAND,
+               gCANMotorController);
 }
 
 void setPledOut(void) {
@@ -285,6 +302,7 @@ void enablePCINT(void) {
 }
 
 void initDriveMode(void) {
+    ADMUX = _BV(REFS0);
     ADMUX |= DRIVE_MODE_ADC;
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
@@ -313,35 +331,6 @@ void initDriveMode(void) {
 
 //***************Error Checking*************
 
-void showError(void) {
-    if (gError % 2 == 1) {
-      PLED1_PORT |= _BV(PLED1);
-    }
-    else {
-      PLED1_PORT &= ~_BV(PLED1);
-    }
-
-    gError /= 2;
-
-    if (gError % 2 == 1) {
-      PLED2_PORT |= _BV(PLED2);
-    }
-    else {
-      PLED2_PORT &= ~_BV(PLED2);
-    }
-
-    gError /= 2;
-
-    if (gError % 2 == 1) {
-      PLED3_PORT |= _BV(PLED3);
-    }
-    else {
-      PLED3_PORT &= ~_BV(PLED3);
-    }
-
-    gError = 0;
-}
-
 void checkShutdownState(void)   {
     //Sets the value of the CANMessage array
     //at the correct position
@@ -366,7 +355,7 @@ void checkShutdownState(void)   {
 }
 
 void checkPanic(void) {
-  if(bit_is_set(gFlag,FLAG_PANIC) || bit_is_set(gFlag, FLAG_THROTTLE_10) || bit_is_set(gFlag, FLAG_IS) || bit_is_set(gFlag, FLAG_ESTOP) || bit_is_set(gFlag, FLAG_IS)){
+  if(bit_is_set(gFlag,FLAG_PANIC)) {
       gThrottle1Out = 0;
       gThrottle2Out = 0;
       gThrottleOut = 0;
@@ -377,7 +366,22 @@ void checkPanic(void) {
 }
 
 void checkPlausibility(void) {
-  if (gThrottle1Voltage * 11 < gThrottle2Voltage * 10 || gThrottle1Voltage * 10 > gThrottle2Voltage * 11) {
+  if (gThrottle1Voltage * 50 > gThrottle2Voltage * 35 || gThrottle1Voltage * 55 < gThrottle2Voltage * 32) {
+    char uart_buf[32];
+    sprintf(uart_buf, "10 pcnt error");
+    LOG_println(uart_buf, strlen(uart_buf));
+    throttle10Counter += 1;
+  }
+  else if ((gThrottle1Voltage > (throttle1_HIGH + ADC_ERROR)) || gThrottle1Voltage < throttle1_LOW - ADC_ERROR) {
+    char uart_buf[32];
+    sprintf(uart_buf, "t1 out of range error");
+    LOG_println(uart_buf, strlen(uart_buf));
+    throttle10Counter += 1;
+  }
+  else if ((gThrottle2Voltage > (throttle2_HIGH + ADC_ERROR)) || gThrottle2Voltage < throttle2_LOW - ADC_ERROR) {
+    char uart_buf[32];
+    sprintf(uart_buf, "t2 out of range error");
+    LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
   else {
@@ -401,15 +405,17 @@ void readPots(void) {
     Reads: throttle1 and throttle2
     */
 
+    ADMUX = _BV(REFS0);
     ADMUX |= THROTTLE1_ADC_NUM;
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
-    uint16_t t1 = ADC >> 2;
+    uint16_t t1 = ADC;
 
+    ADMUX = _BV(REFS0);
     ADMUX |= THROTTLE2_ADC_NUM;
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
-    uint16_t t2 = ADC >> 2;
+    uint16_t t2 = ADC;
 
     gThrottle1Voltage = t1;
     gThrottle2Voltage = t2;
@@ -420,37 +426,41 @@ void mapThrottle(void) {
     uint32_t map1;
     uint32_t map2;
 
+    uint16_t v1 = gThrottle1Voltage >> 2;
+    uint16_t v2 = gThrottle2Voltage >> 2;
+
+    uint16_t t1h = throttle1_HIGH >> 2;
+    uint16_t t1l = throttle1_LOW >> 2;
+    uint16_t t2h = throttle2_HIGH >> 2;
+    uint16_t t2l = throttle2_LOW >> 2;
+
     //If the voltage is out of range, set to min or max
-    if (gThrottle1Voltage < throttle1_LOW) {
-      gThrottle1Voltage = throttle1_LOW;
+    if (v1 < t1l) {
+      v1 = t1l;
     }
-    else if (gThrottle1Voltage > throttle1_HIGH) {
-      gThrottle1Voltage = throttle1_HIGH;
+    else if (v1 > t1h) {
+      v1 = t1h;
     }
 
-    if (gThrottle2Voltage < throttle2_LOW) {
-      gThrottle2Voltage = throttle2_LOW;
+    if (v2 < t2l) {
+      v2 = t2l;
     }
-    else if (gThrottle2Voltage > throttle2_HIGH) {
-      gThrottle2Voltage = throttle2_HIGH;
+    else if (v2 > t2h) {
+      v2 = t2h;
     }
 
     //Map from 0-255
-    map1 = (255 * (gThrottle1Voltage - throttle1_LOW)) / (throttle1_HIGH - throttle1_LOW);
-    map2 = (255 * (gThrottle2Voltage - throttle2_LOW)) / (throttle2_HIGH - throttle2_LOW);
+    map1 = ((v1 - t1l) * 255) / (t1h - t1l);
+    map2 = ((v2 - t2l) * 255) / (t2h - t2l);
     gThrottle1In = map1;
     gThrottle2In = map2;
 
     gThrottle1Out = gThrottle1In;
     gThrottle2Out = gThrottle2In;
 
+    /*
     //---------Map based on drive mode------------
-    if (bit_is_set(gFlag, FLAG_BRAKE) || bit_is_set(gFlag, FLAG_PANIC) || bit_is_clear(gFlag, FLAG_MOTOR_ON))
-    {
-      gThrottle1Out = 0;
-      gThrottle2Out = 0;
-    }
-    else if (gDriveMode == 0) { //error, default to standard
+    if (gDriveMode == 0) { //error, default to standard
       gThrottle1Out = gThrottle1In;
       gThrottle2Out = gThrottle2In;
     }
@@ -468,8 +478,8 @@ void mapThrottle(void) {
         gThrottle2Out = gThrottle2In;
       }
       else {
-        gThrottle1Out = 128 + ((gThrottle1In - 128) << 1);
-        gThrottle2Out = 128 + ((gThrottle2In - 128) << 1);
+        gThrottle1Out = 128 + ((gThrottle1In - 128) >> 1);
+        gThrottle2Out = 128 + ((gThrottle2In - 128) >> 1);
       }
     }
     else if (gDriveMode == 4) { //autocross
@@ -480,6 +490,7 @@ void mapThrottle(void) {
       gThrottle1Out = gThrottle1In;
       gThrottle2Out = gThrottle2In;
     }
+    */
 }
 
 void storeThrottle(void) {
@@ -512,10 +523,15 @@ void getAverage(void) {
 //*************Testing*****************
 void printThrottle1(void) {
   char uart_buf[64];
-  sprintf(uart_buf, "t1: %d", gThrottle1In);
+  sprintf(uart_buf, "tout: %d", gThrottleOut);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
   LOG_println(uart_buf, strlen(uart_buf));
 }
-
 
 void printThrottle(void) {
   char uart_buf[32];
@@ -523,14 +539,78 @@ void printThrottle(void) {
   LOG_println(uart_buf, strlen(uart_buf));
 }
 
+void testStartup(void) {
+  if (bit_is_set(gFlag, FLAG_MOTOR_ON)) {
+    PLED1_PORT |= _BV(PLED1);
+    PLED2_PORT |= _BV(PLED2);
+    PLED3_PORT |= _BV(PLED3);
+  }
+  else {
+    PLED1_PORT &= ~_BV(PLED1);
+    PLED2_PORT &= ~_BV(PLED2);
+    PLED3_PORT &= ~_BV(PLED3);
+  }
+}
+
+void throttleLights(void) {
+  if (gThrottleOut > 64) {
+    PLED1_PORT |= _BV(PLED1);
+  }
+  else {
+    PLED1_PORT &= ~_BV(PLED1);
+  }
+
+  if (gThrottleOut > 128) {
+    PLED2_PORT |= _BV(PLED2);
+  }
+  else {
+    PLED2_PORT &= ~_BV(PLED2);
+  }
+
+  if (gThrottleOut > 192) {
+    PLED3_PORT |= _BV(PLED3);
+  }
+  else {
+    PLED3_PORT &= ~_BV(PLED3);
+  }
+}
+
+void showError(void) {
+    uint8_t temp = gError;
+
+    if (temp % 2 == 1) {
+      PLED1_PORT |= _BV(PLED1);
+    }
+    else {
+      PLED1_PORT &= ~_BV(PLED1);
+    }
+
+    temp /= 2;
+
+    if (temp % 2 == 1) {
+      PLED2_PORT |= _BV(PLED2);
+    }
+    else {
+      PLED2_PORT &= ~_BV(PLED2);
+    }
+
+    temp /= 2;
+
+    if (temp % 2 == 1) {
+      PLED3_PORT |= _BV(PLED3);
+    }
+    else {
+      PLED3_PORT &= ~_BV(PLED3);
+    }
+}
+
 //******************Send CAN Messages************
 void sendCanMessages(int viewCan){
 
     gCANMessage[0] = gThrottleOut;
-    gCANMessage[1] = gDriveMode;
-    gCANMessage[2] = bit_is_set(gFlag,FLAG_BOTS) ? 0xFF : 0x00;
-    gCANMessage[3] = bit_is_set(gFlag,FLAG_IS) ? 0xFF : 0x00;
-    gCANMessage[4] = bit_is_set(gFlag,FLAG_ESTOP) ? 0xFF : 0x00;
+    gCANMessage[1] = bit_is_set(gFlag,FLAG_BOTS) ? 0xFF : 0x00;
+    gCANMessage[2] = bit_is_set(gFlag,FLAG_IS) ? 0xFF : 0x00;
+    gCANMessage[3] = bit_is_set(gFlag,FLAG_ESTOP) ? 0xFF : 0x00;
 
     CAN_transmit(MOB_BROADCAST,
                  CAN_ID_THROTTLE,
@@ -539,8 +619,8 @@ void sendCanMessages(int viewCan){
 
     // Send out Motor controller info
     // REMAP
-    uint16_t thrott = (uint16_t) gThrottleOut;
-    //uint16_t thrott = (uint16_t) gthrottlesmoothed;
+
+    uint16_t thrott = bit_is_clear(gFlag, FLAG_THROTTLE_10) ? (uint16_t) gThrottleOut : 0;
     uint16_t mc_remap = (uint16_t)(thrott * 9);
     gCANMotorController[0] = mc_remap;
     gCANMotorController[1] = mc_remap >> 8;
@@ -555,6 +635,10 @@ void sendCanMessages(int viewCan){
                  CAN_ID_MC_COMMAND,
                  CAN_LEN_MC_COMMAND,
                  gCANMotorController);
+
+
+
+
     if(viewCan){
         char msg1[128];
         char msg2[128];
@@ -578,7 +662,7 @@ int main(void) {
   setPledOut();
   LOG_init();
   enablePCINT();
-  //MUST DISABLE AND ENABLE MOTOR CONTROLER VIA CAN
+  initMC();
 
   while(1) {
     if(bit_is_set(gTimerFlag,UPDATE_STATUS)) {
@@ -587,6 +671,12 @@ int main(void) {
       getAverage();
       checkPanic();
       checkShutdownState();
+      testStartup();
+      sendCanMessages(0);
+
+      gError = 5;
+      showError();
+      printThrottle1();
       printThrottle();
     }
   }
