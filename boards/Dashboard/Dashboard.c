@@ -236,8 +236,10 @@ ISR(PCINT1_vect) {
 
     if(bit_is_set(PINC,START_PIN)) {
         gFlag |= _BV(STATUS_START);
+        PORT_DEBUG_LED2 |= _BV(DEBUG_LED2);
     } else {
         gFlag &= ~_BV(STATUS_START);
+        PORT_DEBUG_LED2 &= ~_BV(DEBUG_LED2);
     }
 }
 
@@ -268,8 +270,10 @@ void initIO(void) {
     DDRB |= _BV(DEBUG_LED1) | _BV(DEBUG_LED2) | _BV(DEBUG_LED3) | _BV(RJ_LED1) | _BV(RJ_LED2) | _BV(IMD_LED) | _BV(START_LED);
     DDRC |= _BV(RTD_LD) | _BV(BMS_LED);
 
-    //Set Start Pin as input pull up
-    DDRC |= ~_BV(START_PIN);
+    //Set start pin as input
+    DDRC &= ~_BV(START_PIN);
+
+    // //Set Start Pin as input pull up
     PORTC |= _BV(START_PIN);
 
     /* Setup pin change interrupt registers for start pin*/
@@ -369,30 +373,35 @@ int main(void){
 
     initTimer();                        // Initialize Timer
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
-
+    
+    PORT_START_LED |= _BV(START_LED);
 
     while(1) {
 
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag    
 
-            PORT_START_LED ^= _BV(START_LED);
-
             PORT_DEBUG_LED1 ^= _BV(DEBUG_LED1);
 
             updateStateFromFlags();
             checkShutdownState();
+
+            CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+
 
 
             if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_clear(gFlag,STATUS_START)) {
             //if(bit_is_set(gFlag,STATUS_START)) {
                 gCAN_MSG[0] = 0xFF;
                 PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
-                CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
 
                 RTD_PORT |= _BV(RTD_LD);
                 _delay_ms(400);
                 RTD_PORT &= ~(_BV(RTD_LD)); 
+
+                if(bit_is_clear(gFlag, PRECHARGE)){
+                  gCAN_MSG[0] = 0x00;
+                }
             }
 
 
@@ -414,14 +423,15 @@ int main(void){
             }
 
             if(bit_is_set(gFlag, STATUS_START)) {
-                PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
+                gCAN_MSG[2] = 0xFF;
             } else{
-                PORT_DEBUG_LED3 &= ~_BV(DEBUG_LED3);
+                gCAN_MSG[2] = 0x00;
             }
 
 
 
         }
+        
 
     }
 }
