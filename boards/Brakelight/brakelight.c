@@ -22,124 +22,73 @@ Author:
 /*----- Macro Definitions -----*/
 /* Shutdown */
 #define GLOBAL_SHUTDOWN         0
-// for gTimerFlag
-//TODO
 
-#define UPDATE_STATUS  0b00000001
+uint8_t gStatusMessage[7] = {0xFF, 0, 0, 0, 0, 0, 0};
 
-// uint8_t msg[1];
+volatile uint8_t gTimerFlag = 0x01;
 
-uint8_t gStatusMessage[7];
 
-volatile uint8_t gFlag = 0;
 
-/* pins */
-
-#define BRAKE_GATE_PIN          PD1
-#define BRAKE_GATE_PIN_BANK     PIND
-#define BRAKE_LIGHT_DDR         DDRD
-#define BSPD_PIN                PB7
-#define BSPD_PIN_BANK           PINB
-#define BSPD_DDR                DDRB
-#define TSMS_PIN                PB6
-#define TSMS_PIN_BANK           PINB
-#define TSMS_DDR                DDRB
-#define E_STOP_PIN              PB5
-#define E_STOP_PIN_BANK         PINB
-#define E_STOP_DDR              DDRB
+#define SS_BSPD                 PB7
+#define SS_TSMS                 PB6
+#define SS_LEFT_ESTOP           PB5
+#define SS_GLVMS                PD0
+#define Brakelight              PD1
 
 /* LEDs */
 #define LED1                    PD6
-#define LED1_PORT               PORTD
 #define LED2                    PD7
-#define LED2_PORT               PORTD
 #define LED3                    PB2
-#define LED3_PORT               PORTB
+#define EXT_LED1                PB3
+#define EXT_LED2                PB4
 
-#define EXT_LED1                PB23
-#define EXT_LED2                PB24
-#define EXT_LED_PORT            PORTB
 
 /* CAN Positions */
 #define CAN_BRAKE_ANALOG_MSB	0
 #define CAN_BRAKE_ANALOG_LSB	1
-#define CAN_BRAKE_GATE          2
-#define CAN_BSPD                3
+#define CAN_BRAKE_GATE        2
+#define CAN_BSPD              3
 #define CAN_TSMS            	4
 #define CAN_ESTOP	            5
-#define CAN_GLVMS		        6
+#define CAN_GLVMS		          6
 
 /* FLAGS */
 #define FLAG_BRAKE	            0
+
+#define UPDATE_STATUS  0
 
 
 /* MOBs */
 #define MOB_BRAKELIGHT		    0
 
 
-/* Functions to Create */
-//CAN ISR Interrupt
-//CAN transmit
-//Timer ISR
-//init_Timer function
-//Check flags
-//init ADC
-//main loop
 
-void CAN_ISR(void) {
-	 //TODO
-}
-
-void CAN_TRANS(void) {
-	 //TODO
-}
-
-void Timer_ISR(void) {
-	 //TODO
-}
-
-
-void init_ADC(void) {
-	 //TODO
-}
-
-void Check_flags(void) {
-	 //TODO
-
-}
-
-void setup_timer_100Hz(void) {
-    /* Set up TC0 in ctc mode, with OCR0A interrupt enabled and at 2 Hz */
-    TCCR0A |= _BV(WGM01);       /* Set WGM[2:0] to 0b010: CTC mode (WGM2 is
-                                 * TCCR0B) */
-    TCCR0B |= _BV(CS02) | _BV(CS00);    /* Set up prescaler for TC0 to clk_io
-                                         * divided by 1024:
-                                         * 4MHz/1024 = 3.90625 kHz
-                                         * CS0[2:0] = 0b101
-                                         * (table 15-10) in datasheet */
-    TIMSK0 |= _BV(OCIE0A);      /* Set interrupt enable for output channel A
-                                 * interrupt on compare match */
-    OCR0A = 39;                /* Set the match register to 195 (maximum
-                                 * period), 3.90625 kHz / 39 = 100.16 Hz */
+void initTimer(void) {
+    TCCR0A = _BV(WGM01);    // Set up 8-bit timer in CTC mode
+    TCCR0B = 0x05;          // clkio/1024 prescaler
+    TIMSK0 |= _BV(OCIE0A);
+    OCR0A = 0x27;
 }
 
 ISR(TIMER0_COMPA_vect) {
     /*
     Timer/Counter0 compare match A
     */
-    gFlag |= UPDATE_STATUS;
+    gTimerFlag =  _BV(UPDATE_STATUS);
 }
 
 /* Interrupt service routine for pin change interrupts on PCINT[0:7] */
-ISR(PCINT0_vect) {
-    /* If BSPD pin is reading high, send CAN panic */
-    gStatusMessage[CAN_BSPD] = (bit_is_set(BSPD_PIN_BANK, BSPD_PIN) ? 0xFF : 0);
-    gStatusMessage[CAN_TSMS] = (bit_is_set(TSMS_PIN_BANK, TSMS_PIN) ? 0xFF : 0);
-    gStatusMessage[CAN_ESTOP] = (bit_is_set(E_STOP_PIN_BANK, E_STOP_PIN) ? 0xFF : 0);
+ISR(PCINT2_vect) {
+
+    gStatusMessage[CAN_GLVMS] = (bit_is_set(PIND, SS_GLVMS) ? 0x00 : 0xFF);
+    gStatusMessage[CAN_BRAKE_GATE] = (bit_is_set(PIND, Brakelight) ? 0xFF : 0x00);
+
 }
 
-ISR(PCINT1_vect){
-    //TODO
+ISR(PCINT0_vect){
+    gStatusMessage[CAN_BSPD] = (bit_is_set(PINB, SS_BSPD) ? 0x00 : 0xFF);
+    gStatusMessage[CAN_TSMS] = (bit_is_set(PINB, SS_TSMS) ? 0x00 : 0xFF);
+    gStatusMessage[CAN_ESTOP] = (bit_is_set(PINB, SS_LEFT_ESTOP) ? 0x00 : 0xFF);
 }
 
 void initADC(void) {
@@ -157,85 +106,58 @@ void initADC(void) {
     ADMUX |= _BV(0x00);
 }
 
-void readPots(void) {
-    /* Read values from ADC and store them
-       in their appropriate variables
-       Reads: Brake Pressure Sense
-    */
-
-    ADMUX = _BV(REFS0);
-    ADMUX |= 10; //pin is also known as ADC10
-    ADCSRA |= _BV(ADSC);
-    loop_until_bit_is_clear(ADCSRA, ADSC);
-    // uint16_t throttle1 = ADC; // ??
-
-    // gThrottle16[0] = throttle1;
-    // gThrottle16[1] = throttle2;
-    // gSteering = steering;
-}
-
-/* Interrupt service routine for pin change interrupts on PCINT[16:23] */
-ISR(PCINT2_vect) {
-  	/* Any of the listed pins could've been triggered. Check if PD1 was pulled low. */
-
-  	if (bit_is_set(BRAKE_GATE_PIN_BANK, BRAKE_GATE_PIN)) {       // if the BRAKE_GATE_PIN is high
-    		LED1_PORT |= _BV(LED1);                     // turn LED1 on
-    		}
-    	else {                                        // if it the BRAKE_GATE_PIN is low
-    		LED1_PORT &= ~_BV(LED1);                    // turn LED1 off
-	}
-
-    // if (bit_is_set(CANSTMOB, RRXOK)) {
-    //     volatile uint8_t msg = CANMSG;      //grab first byte of the CAN Message
-    // 
-    //     if(msg %= 2) {
-    //     // returns least significant bit from the first byte
-    //         gStatusMessage[CAN_BRAKE_ANALOG_LSB] =
-    //
-    // }
-    //
-    //     }
-    }
-
-    gStatusMessage[CAN_GLVMS] = (bit_is_set(E_STOP_PIN_BANK, E_STOP_PIN_BANK) ? 0xFF : 0);
-    gStatusMessage[CAN_BRAKE_GATE] = (bit_is_set(BRAKE_GATE_PIN_BANK, BRAKE_GATE_PIN) ? 0xFF : 0);
-}
+// void readPots(void) {
+//     /* Read values from ADC and store them
+//        in their appropriate variables
+//        Reads: Brake Pressure Sense
+//     */
+//
+//     ADMUX = _BV(REFS0);
+//     ADMUX |= 10; //pin is also known as ADC10
+//     ADCSRA |= _BV(ADSC);
+//     loop_until_bit_is_clear(ADCSRA, ADSC);
+//     // uint16_t throttle1 = ADC; // ??
+//
+//     // gThrottle16[0] = throttle1;
+//     // gThrottle16[1] = throttle2;
+//     // gSteering = steering;
+// }
 
 
 int main(void) {
-//init functions
-//set pins as outputs/inputs
-//CAN listen
 
-    /* set data direction register so that brake light pin is the output  */
-    BRAKE_LIGHT_DDR |= _BV(LED1) | _BV(LED2) | _BV(LED3);
+    //Set up LEDs
+    DDRD |= _BV(LED1) | _BV(LED2);
+    DDRB |= _BV(LED3) | _BV(EXT_LED1) | _BV(EXT_LED2);
+
+    //Set up Shutdown Sense Pins
+    DDRD &= ~_BV(SS_GLVMS);
+    DDRB &= ~_BV(SS_BSPD) & ~_BV(SS_TSMS) & ~_BV(SS_LEFT_ESTOP);
 
   	//initialize pin change interrupts on PD1
   	sei();
-    PCICR |= _BV(PCIE2);          /*Enable 2nd bank of pin change interrupts */
-  	PCMSK2 |= _BV(PCINT17);       /* Enable PCINT17 to trigger interrupts */
+    initTimer();
 
-    PCICR |= _BV(PCIE0);
-    PCMSK0 |= _BV(PCINT7);
+    PCICR |= _BV(PCIE0) | _BV(PCIE2);
+    PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
+    PCMSK2 |= _BV(PCINT16) | _BV(PCINT17);
 
-    initADC()
-
+    initADC();
     CAN_init(CAN_ENABLED);
 
-    setup_timer_100Hz();
+    // CAN_wait_on_receive(0, CAN_ID_BRAKE_PRESSURE, CAN_LEN_BRAKE_PRESSURE, 0xFF);
 
     while(1) {
-        //timer if statement
-        if (gFlag & UPDATE_STATUS) {
-            gFlag &= ~UPDATE_STATUS;      // reset flag state
-
-            CAN_wait_on_receive(0, CAN_ID_BRAKE_PRESSURE,
-                                CAN_LEN_BRAKE_PRESSURE,
-                                0xFF)
-
-            gStatusMessage[CAN_BRAKE_ANALOG_MSB] = 0;
-            gStatusMessage[CAN_BRAKE_ANALOG_LSB] = 0;
-
+        // PORTD ^= _BV(LED2);
+        PORTB ^= _BV(EXT_LED2);
+        if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
+            PORTD ^= _BV(EXT_LED2);
+            gTimerFlag &= ~_BV(UPDATE_STATUS);
+            //
+            // gStatusMessage[CAN_BRAKE_ANALOG_MSB] = 0xFF;
+            // gStatusMessage[CAN_BRAKE_ANALOG_LSB] = 0;
+            //
+            //
             CAN_transmit(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, gStatusMessage);
         }
     }

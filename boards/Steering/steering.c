@@ -76,7 +76,7 @@ ISR(CAN_INT_vect) {
         can_recv_msg[5] = CANMSG;   // left_e_stop
         can_recv_msg[6] = CANMSG;   // GLVMS sense      //grab the first byte of the CAN message
 
-        if(count == 0 && can_recv_msg[2]  == 0xFF) {
+        if(bit_is_clear(gFlag,LEZGOOOO) && can_recv_msg[2]  == 0xFF) {
             PORTB |= _BV(LED1_OUT);
             gFlag |= _BV(BRAKE_PRESSED);
         }
@@ -84,7 +84,6 @@ ISR(CAN_INT_vect) {
             PORTB &= ~_BV(LED1_OUT);
             gFlag &= ~_BV(BRAKE_PRESSED);
         }
-
         //Setup to Receive Again
         CANSTMOB = 0x00;
         CAN_wait_on_receive(MBOX_1, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
@@ -96,24 +95,17 @@ ISR(CAN_INT_vect) {
         can_recv_msg[1] = CANMSG;   // High Side AIR
         can_recv_msg[2] = CANMSG;   // Low Side AIR
         can_recv_msg[3] = CANMSG;   // HV Check
-        // can_recv_msg[4] = CANMSG;   // Debugging
+        can_recv_msg[4] = CANMSG;   // Debugging
 
-        if(count == 0 && can_recv_msg[0] == 0xFF) {
+        if(can_recv_msg[0] == 0xFF) {
             PORTB |= _BV(LED2_OUT);
             gFlag |= _BV(PRECHARGE);
         }
-        else if(can_recv_msg[0] == 0x00) {
+        else {
             PORTB &= ~_BV(LED2_OUT);
-            gFlag &= ~_BV(PRECHARGE) & ~_BV(BRAKE_PRESSED) & ~_BV(READY);
-            count = 0;
+            gFlag &= ~_BV(PRECHARGE);
+            gFlag &= ~_BV(LEZGOOOO);
         }
-
-        // if(can_recv_msg[0] == 0xFF) {
-        //     PORTD |= _BV(LED1_PIN);
-        // }
-        // else if(can_recv_msg[0] == 0x00) {
-        //     PORTD &= ~_BV(LED1_PIN);
-        // }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
@@ -126,7 +118,7 @@ ISR(CAN_INT_vect) {
         can_recv_msg[1] = CANMSG;
         can_recv_msg[2] = CANMSG;       //grab the first byte of the CAN message
 
-        if(count == 0 && can_recv_msg[0] == 0xFF) {
+        if(bit_is_clear(gFlag,LEZGOOOO) && can_recv_msg[0] == 0xFF) {
             PORTB |= _BV(LED3_OUT);
             gFlag |= _BV(READY);
         }
@@ -142,9 +134,7 @@ ISR(CAN_INT_vect) {
 }
 
 ISR(TIMER0_COMPA_vect) {
-    /*
-    Timer/Counter0 compare match A
-    */
+    // Timer/Counter0 compare match A
     gTimerFlag |= _BV(UPDATE_STATUS);
 }
 
@@ -189,31 +179,26 @@ int main (void) {
             // PORTB ^= _BV(LED2_OUT);
             // PORTB ^= _BV(LED3_OUT);
 
-            /* If button is pressed, turn the light on */
-            // if (bit_is_clear(PINB, PINOUT_1)) {
-            //     msg[0] = 0x00;
-            // } else {
-            //     msg[0] = 0xFF;
-            // }
+            if (bit_is_set(gFlag, LEZGOOOO)) {
+                PORTD |= _BV(LED1_PIN);
+            } else {
+                PORTD &= ~_BV(LED2_PIN);
+            }
+
+
             CAN_transmit(MBOX_0, CAN_ID_STEERING_WHEEL, CAN_LEN_STEERING_WHEEL, gCAN_MSG);
-            if(bit_is_set(gFlag,PRECHARGE) && bit_is_set(gFlag,BRAKE_PRESSED) && bit_is_set(gFlag,READY)){
-                count = 1;
+            if(bit_is_clear(gFlag,LEZGOOOO) && bit_is_set(gFlag,PRECHARGE) && bit_is_set(gFlag,BRAKE_PRESSED) && bit_is_set(gFlag,READY)){
                 PORTD ^= _BV(LED1_PIN);
-            }
-            if (count > 0 && count < 50){
-                // PORTD ^= _BV(LED3_PIN);
-                PORTB ^= _BV(LED1_OUT);
-                PORTB ^= _BV(LED2_OUT);
-                PORTB ^= _BV(LED3_OUT);
-                count ++;
-            }
-            if(count > 50){
-
-                PORTB &= ~_BV(LED1_OUT);
-                PORTB &= ~_BV(LED2_OUT);
-                PORTB &= ~_BV(LED3_OUT);
-                gFlag &= ~_BV(PRECHARGE) & ~_BV(BRAKE_PRESSED) & ~_BV(READY);
-
+                for(int i = 0; i < 20; i++){
+                    PORTB ^= _BV(LED1_OUT);
+                    PORTB ^= _BV(LED2_OUT);
+                    PORTB ^= _BV(LED3_OUT);
+                }
+              PORTB &= ~_BV(LED1_OUT);
+              PORTB &= ~_BV(LED2_OUT);
+              PORTB &= ~_BV(LED3_OUT);
+              gFlag &= ~_BV(PRECHARGE) & ~_BV(BRAKE_PRESSED) & ~_BV(READY);
+              gFlag |= _BV(LEZGOOOO);
             }
         }
     }
