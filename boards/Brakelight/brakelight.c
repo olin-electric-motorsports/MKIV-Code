@@ -23,12 +23,6 @@ Author:
 /* Shutdown */
 #define GLOBAL_SHUTDOWN         0
 
-uint8_t gStatusMessage[7] = {0xFF, 0, 0, 0, 0, 0, 0};
-
-volatile uint8_t gTimerFlag = 0x01;
-
-
-
 #define SS_BSPD                 PB7
 #define SS_TSMS                 PB6
 #define SS_LEFT_ESTOP           PB5
@@ -42,7 +36,6 @@ volatile uint8_t gTimerFlag = 0x01;
 #define EXT_LED1                PB3
 #define EXT_LED2                PB4
 
-
 /* CAN Positions */
 #define CAN_BRAKE_ANALOG_MSB	0
 #define CAN_BRAKE_ANALOG_LSB	1
@@ -52,16 +45,13 @@ volatile uint8_t gTimerFlag = 0x01;
 #define CAN_ESTOP	            5
 #define CAN_GLVMS		          6
 
-/* FLAGS */
-#define FLAG_BRAKE	            0
+#define UPDATE_STATUS         0
 
-#define UPDATE_STATUS  0
+#define MOB_BRAKELIGHT		    1
 
+uint8_t gStatusMessage[7] = {0xFF, 0, 0, 0, 0, 0, 0};
 
-/* MOBs */
-#define MOB_BRAKELIGHT		    0
-
-
+volatile uint8_t gTimerFlag = 0x01;
 
 void initTimer(void) {
     TCCR0A = _BV(WGM01);    // Set up 8-bit timer in CTC mode
@@ -106,24 +96,6 @@ void initADC(void) {
     ADMUX |= _BV(0x00);
 }
 
-// void readPots(void) {
-//     /* Read values from ADC and store them
-//        in their appropriate variables
-//        Reads: Brake Pressure Sense
-//     */
-//
-//     ADMUX = _BV(REFS0);
-//     ADMUX |= 10; //pin is also known as ADC10
-//     ADCSRA |= _BV(ADSC);
-//     loop_until_bit_is_clear(ADCSRA, ADSC);
-//     // uint16_t throttle1 = ADC; // ??
-//
-//     // gThrottle16[0] = throttle1;
-//     // gThrottle16[1] = throttle2;
-//     // gSteering = steering;
-// }
-
-
 int main(void) {
 
     //Set up LEDs
@@ -153,11 +125,7 @@ int main(void) {
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
             PORTD ^= _BV(EXT_LED2);
             gTimerFlag &= ~_BV(UPDATE_STATUS);
-            //
-            // gStatusMessage[CAN_BRAKE_ANALOG_MSB] = 0xFF;
-            // gStatusMessage[CAN_BRAKE_ANALOG_LSB] = 0;
-            //
-            //
+          
             CAN_transmit(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, gStatusMessage);
         }
     }
