@@ -85,7 +85,7 @@
 /*----- MOBs -----*/
 #define MOB_BROADCAST_CRITICAL	0 // Broadcasts precharge sequence complete
 #define MOB_MOTORCONTROLLER 		1 // Receives messages from motor controller
-#define MOB_PANIC 							2 // Panic MOB for BMS to open shutdown circuit
+#define MOB_BROADCAST_PANIC 		2 // Panic MOB for BMS to open shutdown circuit
 #define MOB_BROADCAST_SS				3
 #define	MOB_BRAKELIGHT					4
 #define	MOB_IBH									5 // TODO change this to panic message? probably should listen for panics
@@ -96,7 +96,7 @@
 #define OVF_COUNT_DISCHARGING 			0x00 // TODO calculate
 
 /*----- Other Macros -----*/
-#define MINIMUM_VOLTAGE_AFTER_PRECHARGE		0xB4 // 180V, 90% of minimum pack voltage
+#define MINIMUM_VOLTAGE_AFTER_PRECHARGE		0xB4 // 180V, 90% of minimum pack voltage (200V)
 
 volatile uint8_t gFlag = 0x00; // Global Flag
 volatile uint8_t sFlag = 0x00; // Shutdown Sense Flag
@@ -255,15 +255,15 @@ void setOutputs(void) {
 }
 
 void checkBMSPowerStagePlausibility (void) {
-		if ( (bit_is_set(gFlag, FLAG_BMS_STATUS) && bit_is_clear(sFlag, FLAG_SS_BMS))
-		|| (bit_is_clear(gFlag, FLAG_BMS_STATUS) && bit_is_set(sFlag, FLAG_SS_BMS)) {
+		if ( (bit_is_set(gFlag, FLAG_BMS_STATUS) && bit_is_set(sFlag, FLAG_SS_MP) && bit_is_clear(sFlag, FLAG_SS_BMS))
+		|| (bit_is_clear(gFlag, FLAG_BMS_STATUS) && bit_is_set(sFlag, FLAG_SS_BMS)) ) {
 			panic(FAULT_CODE_BMS_IMPLAUSIBILITY);
 		}
 }
 
 void checkIMDPowerStagePlausibility (void) {
-		if ( (bit_is_set(gFlag, FLAG_IMD_STATUS) && bit_is_clear(sFlag, FLAG_SS_IMD))
-		|| (bit_is_clear(gFlag, FLAG_IMD_STATUS) && bit_is_set(sFlag, FLAG_SS_IMD)) {
+		if ( (bit_is_set(gFlag, FLAG_IMD_STATUS) && bit_is_set(sFlag, FLAG_SS_BMS) && bit_is_clear(sFlag, FLAG_SS_IMD))
+		|| (bit_is_clear(gFlag, FLAG_IMD_STATUS) && bit_is_set(sFlag, FLAG_SS_IMD)) ) {
 			panic(FAULT_CODE_IMD_IMPLAUSIBILITY);
 		}
 }
@@ -322,7 +322,7 @@ void sendCriticalCANMessage (void) {
 void panic (uint8_t fault_code) {
 	tractiveSystemStatus = TS_STATUS_PANIC;
 	uint8_t msg[1] = {fault_code};
-	CAN_transmit(MOB_PANIC,
+	CAN_transmit(MOB_BROADCAST_PANIC,
 								CAN_ID_PANIC,
 								CAN_LEN_PANIC,
 								msg);
@@ -347,7 +347,7 @@ int main (void) {
 
 				checkBMSPowerStagePlausibility();
 				checkIMDPowerStagePlausibility();
-				checkAIRPLUS();
+				checkAIRPLUS(); // TODO think about charging, currently compares AIR plus to TSMS can message, won't work in charging
 				checkAIRMINUS();
 				sendShutdownSenseCANMessage();
 				sendCriticalCANMessage();
