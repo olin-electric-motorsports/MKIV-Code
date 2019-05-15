@@ -45,18 +45,18 @@
 #define INREG_SS_BMS			 PINC
 
 /*----- Fault Codes -----*/
-#define FAULT_CODE_GENERAL										0X00;
-#define FAULT_CODE_BMS_IMPLAUSIBILITY 				0x01;
-#define FAULT_CODE_IMD_IMPLAUSIBILITY 				0x02;
-#define FAULT_CODE_AIRPLUS_WELD 							0x03;
-#define FAULT_CODE_AIRMINUS_WELD		 					0x04;
-#define FAULT_CODE_AIRPLUS_CONTROL_LOSS 			0x05;
-#define FAULT_CODE_AIRMINUS_CONTROL_LOSS 			0x06;
-#define FAULT_CODE_PRECHARGE_STUCK						0X07;
-#define FAULT_CODE_PRECHARGE_CONTROL_LOSS			0X08;
-#define FAULT_CODE_DISCHARGE_STUCK						0X09; // unused because of difficulty of detection
-#define FAULT_CODE_DISCHARGE_CONTROL_LOSS			0X0A;
-#define FAULT_CODE_PRECHARGE_INCOMPLETE				0X0B; // if precharge is too slow or stopping below MINIMUM_VOLTAGE_AFTER_PRECHARGE
+#define FAULT_CODE_GENERAL										0X00
+#define FAULT_CODE_BMS_IMPLAUSIBILITY 				0x01
+#define FAULT_CODE_IMD_IMPLAUSIBILITY 				0x02
+#define FAULT_CODE_AIRPLUS_WELD 							0x03
+#define FAULT_CODE_AIRMINUS_WELD		 					0x04
+#define FAULT_CODE_AIRPLUS_CONTROL_LOSS 			0x05
+#define FAULT_CODE_AIRMINUS_CONTROL_LOSS 			0x06
+#define FAULT_CODE_PRECHARGE_STUCK						0X07
+#define FAULT_CODE_PRECHARGE_CONTROL_LOSS			0X08
+#define FAULT_CODE_DISCHARGE_STUCK						0X09 // unused because of difficulty of detection
+#define FAULT_CODE_DISCHARGE_CONTROL_LOSS			0X0A
+#define FAULT_CODE_PRECHARGE_INCOMPLETE				0X0B // if precharge is too slow or stopping below MINIMUM_VOLTAGE_AFTER_PRECHARGE
 
 /*----- gFlag -----*/
 #define UPDATE_STATUS       0
@@ -91,9 +91,10 @@
 #define	MOB_IBH									5 // TODO change this to panic message? probably should listen for panics
 
 /*----- Overflow Counts for TS Status Delays -----*/
+// Timer1 is running at ~7.63 Hz
 #define OVF_COUNT_PRECHARGE_DELAY		0x17 // roughly 3 seconds per FMEA
-#define OVF_COUNT_PRECHARGING 			0x00 // TODO calculate
-#define OVF_COUNT_DISCHARGING 			0x00 // TODO calculate
+#define OVF_COUNT_PRECHARGING 			0x10 // roughly 2 seconds -> 3 time constants (1/(2*pi*1k*440uF))*3 = 1.08ish
+#define OVF_COUNT_DISCHARGING 			0x1F // roughly 4 seconds -> 3 times as long as precharge (3k res vs 1k res) -> 3.24ish
 
 /*----- Other Macros -----*/
 #define MINIMUM_VOLTAGE_AFTER_PRECHARGE		0xB4 // 180V, 90% of minimum pack voltage (200V)
@@ -199,7 +200,7 @@ ISR(CAN_INT_vect) {
 	      msgMC[0] = CANMSG;
 	      msgMC[1] = CANMSG;
 
-	      motorControllerVoltage = msg[0] | (msg[1]<<8);
+	      motorControllerVoltage = msgMC[0] | (msgMC[1]<<8);
 
 	      CANSTMOB = 0x00;
 	      CAN_wait_on_receive(MOB_MOTORCONTROLLER,
@@ -240,7 +241,7 @@ void initTimer1(void) {
 		// Normal operation so no need to set TCCR1A
 		TCCR1B |= _BV(CS11); // prescaler set to 8
 		// 4MHz CPU, prescaler 8, 16-bit timer overflow -> (4000000/8)/(2^16-1) =  7.63 Hz
-		TIMSK1 |= _BV(TOIE); // enable interrupt on overflow
+		TIMSK1 = 0x01; // enable interrupt on overflow
 		cli();
 		TCNT1H = 0x00; // write timer count to 0, high byte must be written first per datasheet
 		TCNT1L = 0x00;
@@ -252,6 +253,15 @@ void setOutputs(void) {
 		//Sets these pins at outputs
 		DDRB |= _BV(PRECHARGE_CTRL) | _BV(AIRMINUS_CTRL) | _BV(RJ45_LED1) | _BV(RJ45_LED2);
 		DDRC |= _BV(LED1) | _BV(LED2);
+}
+
+void panic (uint8_t fault_code) {
+	tractiveSystemStatus = TS_STATUS_PANIC;
+	uint8_t msg[1] = {fault_code};
+	CAN_transmit(MOB_BROADCAST_PANIC,
+								CAN_ID_PANIC,
+								CAN_LEN_PANIC,
+								msg);
 }
 
 void checkBMSPowerStagePlausibility (void) {
@@ -317,15 +327,6 @@ void sendCriticalCANMessage (void) {
 								CAN_ID_AIR_CONTROL_CRITICAL,
 								CAN_LEN_AIR_CONTROL_CRITICAL,
 								msgCritical);
-}
-
-void panic (uint8_t fault_code) {
-	tractiveSystemStatus = TS_STATUS_PANIC;
-	uint8_t msg[1] = {fault_code};
-	CAN_transmit(MOB_BROADCAST_PANIC,
-								CAN_ID_PANIC,
-								CAN_LEN_PANIC,
-								msg);
 }
 
 int main (void) {
