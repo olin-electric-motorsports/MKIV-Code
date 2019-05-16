@@ -278,7 +278,7 @@ void checkBMSPowerStagePlausibility (void) { // tested and working
 		}
 }
 
-void checkIMDPowerStagePlausibility (void) {
+void checkIMDPowerStagePlausibility (void) { // tested and working
 		if ( (bit_is_set(gFlag, FLAG_IMD_STATUS) && bit_is_set(sFlag, FLAG_SS_BMS) && bit_is_clear(sFlag, FLAG_SS_IMD))
 		|| (bit_is_clear(gFlag, FLAG_IMD_STATUS) && bit_is_set(sFlag, FLAG_SS_IMD)) ) {
 			panic(FAULT_CODE_IMD_IMPLAUSIBILITY);
@@ -286,9 +286,9 @@ void checkIMDPowerStagePlausibility (void) {
 }
 
 void checkAIRPLUS (void) {
-		if ( bit_is_set(gFlag, FLAG_AIRPLUS_AUX) && bit_is_clear(sFlag, FLAG_TSMS_STATUS) ) {
+		if ( bit_is_set(gFlag, FLAG_AIRPLUS_AUX) && bit_is_clear(gFlag, FLAG_TSMS_STATUS) ) {
 			panic(FAULT_CODE_AIRPLUS_WELD);
-		} else if ( bit_is_clear(gFlag, FLAG_AIRPLUS_AUX) && bit_is_set(sFlag, FLAG_TSMS_STATUS) ) {
+		} else if ( bit_is_clear(gFlag, FLAG_AIRPLUS_AUX) && bit_is_set(gFlag, FLAG_TSMS_STATUS) ) {
 			panic(FAULT_CODE_AIRPLUS_CONTROL_LOSS);
 		}
 }
@@ -355,10 +355,9 @@ int main (void) {
     while(1) {
 			if(bit_is_set(gFlag, UPDATE_STATUS)){
 
-				gFlag &= ~_BV(UPDATE_STATUS);
+				gFlag &= ~_BV(UPDATE_STATUS); // TODO IMD STATUS PIN TURNS OFF SLOW DEBUG
 
 				checkBMSPowerStagePlausibility();
-				/*
 				checkIMDPowerStagePlausibility();
 				checkAIRPLUS(); // TODO think about charging, currently compares AIR plus to TSMS can message, won't work in charging
 				checkAIRMINUS();
