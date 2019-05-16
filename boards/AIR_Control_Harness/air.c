@@ -413,7 +413,7 @@ int main (void) {
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus and precharge
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
 						panic(FAULT_CODE_GENERAL); // see that panic keeps being sent...
-				}*/
+				}
 
 			}
 
