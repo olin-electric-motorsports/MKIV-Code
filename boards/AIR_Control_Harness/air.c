@@ -153,9 +153,9 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD
 		}
 
 		if(bit_is_clear(INREG_SS_HVD,PIN_SS_HVD)){
-		 gFlag |= _BV(FLAG_SS_HVD);
+		 sFlag |= _BV(FLAG_SS_HVD);
 		} else {
-		 gFlag &= ~_BV(FLAG_SS_HVD);
+		 sFlag &= ~_BV(FLAG_SS_HVD);
 		}
 }
 
@@ -173,23 +173,23 @@ ISR(PCINT1_vect) { // PCINT8-15 -> AIRPLUS_AUX, AIRMINUS_AUX, SS_IMD, SS_BMS
 		}
 
 		if(bit_is_clear(INREG_SS_IMD,PIN_SS_IMD)){
-		 gFlag |= _BV(FLAG_SS_IMD);
+		 sFlag |= _BV(FLAG_SS_IMD);
 		} else {
-		 gFlag &= ~_BV(FLAG_SS_IMD);
+		 sFlag &= ~_BV(FLAG_SS_IMD);
 		}
 
 		if(bit_is_clear(INREG_SS_BMS,PIN_SS_BMS)){
-		 gFlag |= _BV(FLAG_SS_BMS);
+		 sFlag |= _BV(FLAG_SS_BMS);
 		} else {
-		 gFlag &= ~_BV(FLAG_SS_BMS);
+		 sFlag &= ~_BV(FLAG_SS_BMS);
 		}
 }
 
 ISR(PCINT2_vect) { // PCINT16-23 -> SS_MP
 		if(bit_is_clear(INREG_SS_MP,PIN_SS_MP)){
-		 gFlag |= _BV(FLAG_SS_MP);
+		 sFlag |= _BV(FLAG_SS_MP);
 		} else {
-		 gFlag &= ~_BV(FLAG_SS_MP);
+		 sFlag &= ~_BV(FLAG_SS_MP);
 		}
 }
 
@@ -255,7 +255,14 @@ void setOutputs(void) {
 		DDRC |= _BV(LED1) | _BV(LED2);
 }
 
+void readAllInputs(void){
+		PCINT0_vect();
+		PCINT1_vect();
+		PCINT2_vect();
+}
+
 void panic (uint8_t fault_code) {
+	//LED_PORT ^= _BV(LED1); // DEBUG
 	tractiveSystemStatus = TS_STATUS_PANIC;
 	uint8_t msg[1] = {fault_code};
 	CAN_transmit(MOB_BROADCAST_PANIC,
@@ -264,7 +271,7 @@ void panic (uint8_t fault_code) {
 								msg);
 }
 
-void checkBMSPowerStagePlausibility (void) {
+void checkBMSPowerStagePlausibility (void) { // tested and working
 		if ( (bit_is_set(gFlag, FLAG_BMS_STATUS) && bit_is_set(sFlag, FLAG_SS_MP) && bit_is_clear(sFlag, FLAG_SS_BMS))
 		|| (bit_is_clear(gFlag, FLAG_BMS_STATUS) && bit_is_set(sFlag, FLAG_SS_BMS)) ) {
 			panic(FAULT_CODE_BMS_IMPLAUSIBILITY);
@@ -338,8 +345,12 @@ int main (void) {
 
     // Enable interrupt
     PCICR |= _BV(PCIE0) | _BV(PCIE1) | _BV(PCIE2);
+		PCMSK0 |= _BV(PCINT2) | _BV(PCINT3) | _BV(PCINT6);
+		PCMSK1 |= _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT15);
+		PCMSK2 |= _BV(PCINT16);
 
 		setOutputs();
+		readAllInputs(); // in case they are set high before micro starts up and therefore won't trigger an interrupt
 
     while(1) {
 			if(bit_is_set(gFlag, UPDATE_STATUS)){
@@ -347,6 +358,7 @@ int main (void) {
 				gFlag &= ~_BV(UPDATE_STATUS);
 
 				checkBMSPowerStagePlausibility();
+				/*
 				checkIMDPowerStagePlausibility();
 				checkAIRPLUS(); // TODO think about charging, currently compares AIR plus to TSMS can message, won't work in charging
 				checkAIRMINUS();
@@ -402,7 +414,7 @@ int main (void) {
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus and precharge
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
 						panic(FAULT_CODE_GENERAL); // see that panic keeps being sent...
-				}
+				}*/
 
 			}
 
