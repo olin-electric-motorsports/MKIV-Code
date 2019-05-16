@@ -358,7 +358,7 @@ int main (void) {
 				gFlag &= ~_BV(UPDATE_STATUS); // TODO IMD STATUS PIN TURNS OFF SLOW DEBUG
 
 				checkBMSPowerStagePlausibility();
-				checkIMDPowerStagePlausibility();
+				checkIMDPowerStagePlausibility(); // delay this for IMD startup time
 				checkAIRPLUS(); // TODO think about charging, currently compares AIR plus to TSMS can message, won't work in charging
 				checkAIRMINUS();
 				sendShutdownSenseCANMessage();
