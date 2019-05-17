@@ -65,8 +65,6 @@
 #define FLAG_IMD_STATUS     3
 #define FLAG_BMS_STATUS     4
 #define FLAG_TSMS_STATUS		5
-#define FLAG_TS_VOLTAGE			6
-#define FLAG_TS_CURRENT			7
 
 /*----- sFlag -----*/
 #define FLAG_SS_HVD   0
@@ -97,7 +95,7 @@
 #define OVF_COUNT_DISCHARGING 			0x1F // roughly 4 seconds -> 3 times as long as precharge (3k res vs 1k res) -> 3.24ish
 
 /*----- Other Macros -----*/
-#define MINIMUM_VOLTAGE_AFTER_PRECHARGE		0xB4 // 180V, 90% of minimum pack voltage (200V)
+#define MINIMUM_VOLTAGE_AFTER_PRECHARGE		0x708 // 1800 -> voltage message is 10x, 180V, 90% of minimum pack voltage (200V)
 
 volatile uint8_t gFlag = 0x00; // Global Flag
 volatile uint8_t sFlag = 0x00; // Shutdown Sense Flag
