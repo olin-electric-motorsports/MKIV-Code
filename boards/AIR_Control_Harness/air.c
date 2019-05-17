@@ -242,6 +242,9 @@ void initTimer1(void) {
 		TCCR1B |= _BV(CS11); // prescaler set to 8
 		// 4MHz CPU, prescaler 8, 16-bit timer overflow -> (4000000/8)/(2^16-1) =  7.63 Hz
 		TIMSK1 = 0x01; // enable interrupt on overflow
+}
+
+void resetTimer1(void) {
 		cli();
 		TCNT1H = 0x00; // write timer count to 0, high byte must be written first per datasheet
 		TCNT1L = 0x00;
@@ -338,6 +341,7 @@ void sendCriticalCANMessage (void) {
 
 int main (void) {
     initTimer0();
+		initTimer1();
     sei(); //Inititiates interrupts for the ATMega
     CAN_init(CAN_ENABLED);
     CAN_wait_on_receive(MOB_MOTORCONTROLLER, CAN_ID_MC_VOLTAGE, CAN_LEN_MC_VOLTAGE, CAN_MSK_SINGLE);
@@ -367,7 +371,7 @@ int main (void) {
 				if(tractiveSystemStatus==TS_STATUS_DEENERGIZED){
 						if(bit_is_set(gFlag, FLAG_TSMS_STATUS)){ // if tsms closed
 							tractiveSystemStatus = TS_STATUS_PRECHARGE_DELAY; // set status to precharge delay
-							initTimer1(); // reset timer 1
+							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGE_DELAY) {
 						if(motorControllerVoltage > 0){ // if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
@@ -376,7 +380,7 @@ int main (void) {
 							tractiveSystemStatus = TS_STATUS_PRECHARGING; // set status to precharging
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x0f; // update critical can message to precharge started
 							PRECHARGE_PORT |= _BV(PRECHARGE_CTRL); // close precharge relay
-							initTimer1(); // reset timer 1
+							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGING) {
 						if(timer1OverflowCount>OVF_COUNT_PRECHARGING){ // if precharging time elapsed
@@ -399,7 +403,7 @@ int main (void) {
 							AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 							tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
-							initTimer1(); // reset timer 1
+							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_DISCHARGING) {
 						if(timer1OverflowCount>OVF_COUNT_DISCHARGING){ // if discharging time elapsed
