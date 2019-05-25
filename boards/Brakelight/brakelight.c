@@ -36,18 +36,24 @@ Author:
 #define EXT_LED1                PB3
 #define EXT_LED2                PB4
 
-/* CAN Positions */
+/* CAN Message Positions */
 #define CAN_BRAKE_ANALOG_MSB	0
 #define CAN_BRAKE_ANALOG_LSB	1
-#define CAN_BRAKE_GATE        2
-#define CAN_BSPD              3
-#define CAN_TSMS            	4
-#define CAN_ESTOP	            5
-#define CAN_GLVMS		          6
+#define CAN_BRAKE_GATE		2
+#define CAN_BSPD		3
+#define CAN_TSMS		4
+#define CAN_ESTOP		5
+#define CAN_GLVMS		6
+
+/* CAN Message Objects */
+#define MOB_PANIC		0
+#define MOB_BRAKELIGHT		1
+
+/* Fault Codes */
+#define FAULT_CODE_BSPD 	0x10
+
 
 #define UPDATE_STATUS         0
-
-#define MOB_BRAKELIGHT		    1
 
 uint8_t gStatusMessage[7] = {0xFF, 0, 0, 0, 0, 0, 0};
 
@@ -96,11 +102,29 @@ void initADC(void) {
     ADMUX |= _BV(0x00);
 }
 
+void readBrakePressure(void){
+	/*
+	 * Read values from the brake pressure sensor
+	 * to send over CAN to the rest of the vehicle
+	 */
+
+	ADMUX = _BV(REFS0);
+	ADMUX |= 10; // ADC10
+	ADCSRA |= _BV(ADSC);
+	loop_until_bit_is_clear(ADCSRA,ADSC);
+	uint16_t brakeValue = ADC; 
+
+	gStatusMessage[CAN_BRAKE_ANALOG_MSB] = (uint8_t) (brakeValue >> 2);
+	gStatusMessage[CAN_BRAKE_ANALOG_LSB] = (uint8_t) brakeValue;
+
+}
+
 int main(void) {
 
     //Set up LEDs
     DDRD |= _BV(LED1) | _BV(LED2);
     DDRB |= _BV(LED3) | _BV(EXT_LED1) | _BV(EXT_LED2);
+    DDRC |= _BV(PC0); //Cooling pump LSD
 
     //Set up Shutdown Sense Pins
     DDRD &= ~_BV(SS_GLVMS);
@@ -125,7 +149,7 @@ int main(void) {
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
             PORTD ^= _BV(EXT_LED2);
             gTimerFlag &= ~_BV(UPDATE_STATUS);
-          
+            readBrakePressure(); 
             CAN_transmit(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, gStatusMessage);
         }
     }
