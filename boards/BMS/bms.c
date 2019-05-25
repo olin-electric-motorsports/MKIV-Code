@@ -209,9 +209,11 @@ uint8_t read_all_temperatures(void)
         }
     }
 
+    mux_disable(TOTAL_IC, MUX1_ADDR);
+
     for( int ic = 0; ic < TOTAL_IC; ic++) {
         char temp_msg[128] = "";
-        sprintf(temp_msg, "t%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", ic, error,
+        sprintf(temp_msg, "t%d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
                         temp_sensor_voltages[ic][0],
                         temp_sensor_voltages[ic][1],
                         temp_sensor_voltages[ic][2],
