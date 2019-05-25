@@ -27,13 +27,17 @@
 
 // gFlag register pre-defines
 #define TRANSMIT_STATUS     0b00000001
-#define UNDER_VOLTAGE       0b00000100
-#define OVER_VOLTAGE        0b00001000
-#define UNDER_TEMP          0b00010000
-#define OVER_TEMP           0b00100000
+#define UNDER_VOLTAGE       0b00000010
+#define OVER_VOLTAGE        0b00000100
+#define UNDER_TEMP          0b00001000
+#define OVER_TEMP           0b00010000
+#define SOFT_OVER_TEMP      0b00100000
 
 volatile uint8_t gFlag = 0;
 uint8_t gStatusMessage[7];
+
+//global BMS status indicator
+uint8_t gBMSStatus = 0;
 
 // Timer prescale vars and constants
 uint8_t gCounterTransmit = 0;
@@ -42,6 +46,11 @@ const uint8_t transmit_match = 100;
 //Under Voltage and Over Voltage Thresholds
 const uint16_t OV_THRESHOLD = 42000;//35900; // Over voltage threshold ADC Code
 const uint16_t UV_THRESHOLD = 25000; //20000;// Under voltage threshold ADC Code
+
+//Temperature sensor voltage thresholds
+const uint16_t OT_THRESHOLD = 728; // 60 deg. C
+const uint16_t SOFT_OT_THRESHOLD = 1255; //45 deg. C
+const uint16_t UT_THRESHOLD = 7384; //0 deg. C TODO: Confirm this is the case
 
 // I2C MUX addresses from peripheral board
 const uint8_t MUX1_ADDR = 0x90;
@@ -189,8 +198,8 @@ uint8_t read_all_temperatures(void)
             //Sensors are in reverse order
             temp_sensor_voltages[ic][NUM_TEMPS-9-i] = _aux_voltages[ic][0]; //Store temperatures
         }
-    }
 
+    }
     // Disable MUX2, now iterate through MUX1 (for modules 7-10)
     mux_disable(TOTAL_IC, MUX2_ADDR);
 
@@ -211,7 +220,7 @@ uint8_t read_all_temperatures(void)
 
     mux_disable(TOTAL_IC, MUX1_ADDR);
 
-    for( int ic = 0; ic < TOTAL_IC; ic++) {
+    for(int ic = 0; ic < TOTAL_IC; ic++) {
         char temp_msg[128] = "";
         sprintf(temp_msg, "t%d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
                         temp_sensor_voltages[ic][0],
@@ -239,11 +248,23 @@ uint8_t read_all_temperatures(void)
         LOG_println(temp_msg, strlen(temp_msg));
     }
 
+    // Check temperature values for in-range ness
+    gFlag &= ~(OVER_TEMP | SOFT_OVER_TEMP | UNDER_TEMP);
 
-    // if (over_temp == 0) {
-    //     //upon successful execution clear flags
-    //     FLAGS &= ~OVER_TEMP;
-    // }
+    for (uint8_t ic = 0; ic < TOTAL_IC; ic ++) {
+        for (uint8_t sensor = 0; sensor < NUM_TEMPS; sensor ++) {
+            if (temp_sensor_voltages[ic][sensor] < SOFT_OT_THRESHOLD) {
+                gFlag |= SOFT_OVER_TEMP;
+            }
+            if (temp_sensor_voltages[ic][sensor] < OT_THRESHOLD) {
+                gFlag |= OVER_TEMP;
+                LED_PORT |= _BV(LED3_PIN);
+            }
+            if (temp_sensor_voltages[ic][sensor] > UT_THRESHOLD) {
+                gFlag |= UNDER_TEMP;
+            }
+        }
+    }
 
     return error;
 }
@@ -269,10 +290,11 @@ int main (void) {
     //Perform an initial check before we set the relay
     RELAY_DDR |= _BV(RELAY_PIN);
     read_all_voltages();
-    //read_all_temperatures();
+    read_all_temperatures();
     // If we've got no faults
     if (!(gFlag & (OVER_TEMP | UNDER_TEMP | OVER_VOLTAGE | UNDER_VOLTAGE))) {
         RELAY_PORT |= _BV(RELAY_PIN);
+        gBMSStatus = 0xFF;
     }
 
     while (1) {
@@ -302,7 +324,7 @@ int main (void) {
             // TODO: state of charge
             gStatusMessage[2] = 12;
             // Report BMS ok for BMS light
-            gStatusMessage[3] = 0xFF;
+            gStatusMessage[3] = gBMSStatus;
             // Report regen status
             gStatusMessage[4] = 0;
             // Report current limiting
@@ -319,6 +341,7 @@ int main (void) {
                     (missed_cycle_count >= MAX_MISSED_CYCLES)) {
 
             RELAY_PORT &= ~_BV(RELAY_PIN);
+            gBMSStatus = 0x00;
         }
 
     }
