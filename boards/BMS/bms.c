@@ -48,6 +48,10 @@ const uint8_t MUX1_ADDR = 0x90;
 const uint8_t MUX2_ADDR = 0x92;
 const uint8_t MUX3_ADDR = 0x94;
 
+// BMS comms error gCounterTransmit
+uint8_t missed_cycle_count = 0;
+const uint8_t MAX_MISSED_CYCLES = 3;
+
 // Scale down transmit task
 ISR(TIMER0_COMPA_vect) {
     if (gCounterTransmit == transmit_match) {
@@ -89,6 +93,27 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     //Read back and parse out ADC measurements
     error = ltc6811_rdcv(TOTAL_IC, cell_voltages);
 
+    if (error == 0) {
+        // Do value checking
+        for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
+            for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
+
+                //Skip cells that are 0, i.e. cell 6 and 12
+                if ((cell == 5) || (cell == 11)) continue;
+
+                uint16_t cell_value = cell_voltages[ic][cell];
+
+                if (cell_value > OV_THRESHOLD) {
+                    gFlag |= OVER_VOLTAGE;
+                } else if (cell_value < UV_THRESHOLD) {
+                    gFlag |= UNDER_VOLTAGE;
+                } else {
+                    gFlag &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
+                }
+            }
+        }
+    }
+
     // TODO very slow, comment out after inspection ****************************
     // UART out cell voltages as 10  16-bit ints
     for (int i = 0; i < TOTAL_IC; i++) {
@@ -110,25 +135,6 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
                           cell_voltages[i][10]);
 
         LOG_println(tmp_msg, strlen(tmp_msg));
-    }
-
-    // Do value checking
-    for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
-        for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-
-            //Skip cells that are 0, i.e. cell 6 and 12
-            if ((cell == 5) || (cell == 11)) continue;
-
-            uint16_t cell_value = cell_voltages[ic][cell];
-
-            if (cell_value > OV_THRESHOLD) {
-                gFlag |= OVER_VOLTAGE;
-            } else if (cell_value < UV_THRESHOLD) {
-                gFlag |= UNDER_VOLTAGE;
-            } else {
-                gFlag &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
-            }
-        }
     }
 
     return error;
@@ -262,8 +268,16 @@ int main (void) {
         if (gFlag & TRANSMIT_STATUS) {
             gFlag &= ~TRANSMIT_STATUS;
 
-            read_all_voltages();
-            read_all_temperatures();
+            uint8_t error = 0;
+            error += read_all_voltages();
+            error += read_all_temperatures();
+
+            // If we got a PEC error from any of those
+            if (error != 0) {
+                missed_cycle_count += 1;
+            } else {
+                missed_cycle_count = 0;
+            }
 
             LED_PORT ^= _BV(LED2_PIN);
 
@@ -287,7 +301,10 @@ int main (void) {
 
         }
 
-        if ((gFlag & OVER_VOLTAGE) || (gFlag & UNDER_VOLTAGE) || (gFlag & OVER_TEMP) || (gFlag & UNDER_TEMP)) {
+        if ((gFlag & OVER_VOLTAGE) || (gFlag & UNDER_VOLTAGE) ||
+                    (gFlag & OVER_TEMP) || (gFlag & UNDER_TEMP) ||
+                    (missed_cycle_count >= MAX_MISSED_CYCLES)) {
+
             RELAY_PORT &= ~_BV(RELAY_PIN);
         }
 

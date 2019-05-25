@@ -20,7 +20,7 @@
 
 #define TOTAL_IC    1
 #define NUM_CELLS   12 //There are 10, but we need to read all 12 back.
-#define NUM_TEMPS   10 //There are 10 of these.
+#define NUM_TEMPS   20  //There are 20 temp sensors per segment
 #define NUM_AUX_CH  6   // There are 10 AUX voltages
 
 // Cell voltages read back from the peripheral board
