@@ -162,7 +162,7 @@ uint8_t read_all_temperatures(void)
         mux_set_channel(TOTAL_IC, MUX3_ADDR, i);
         _delay_us(5);                             //Spec is 1600ns from stop cond.
         ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement for GPIO CH 1
-        _delay_us(500);                           //only need to delay 500uS for GPIO1 conversion
+        ltc6811_pollAdc();
         error = ltc6811_rdaux(0,TOTAL_IC, _aux_voltages); //Parse all ADC measurements back
 
         // Grab aux voltages into the temp voltages array
@@ -170,6 +170,7 @@ uint8_t read_all_temperatures(void)
             //First four are out of order, 0123 are 2_2, 2_1, 1_2, and 1_1 respectively
             temp_sensor_voltages[ic][3-i] = _aux_voltages[ic][0]; //Store temperatures
         }
+
     }
 
     // Disable MUX3, now iterate through MUX2 (for modules 3-6)
@@ -180,13 +181,13 @@ uint8_t read_all_temperatures(void)
         mux_set_channel(TOTAL_IC, MUX2_ADDR, i);
         _delay_us(5);                             //Spec is 1600ns from stop cond.
         ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement for GPIO CH 1
-        _delay_us(500);                           //only need to delay 500uS for GPIO1 conversion
+        ltc6811_pollAdc();//only need to delay 500uS for GPIO1 conversion
         error = ltc6811_rdaux(0, TOTAL_IC, _aux_voltages); //Parse all ADC measurements back
 
         // Grab aux voltages into the temp voltages array
         for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
             //Sensors are in reverse order
-            temp_sensor_voltages[ic][MUX_CHANNELS-1-i] = _aux_voltages[ic][0]; //Store temperatures
+            temp_sensor_voltages[ic][NUM_TEMPS-9-i] = _aux_voltages[ic][0]; //Store temperatures
         }
     }
 
@@ -198,19 +199,19 @@ uint8_t read_all_temperatures(void)
         mux_set_channel(TOTAL_IC, MUX1_ADDR, i);
         _delay_us(5);                             //Spec is 1600ns from stop cond.
         ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement for GPIO CH 1
-        _delay_us(500);                           //only need to delay 500uS for GPIO1 conversion
+        ltc6811_pollAdc();                           //only need to delay 500uS for GPIO1 conversion
         error = ltc6811_rdaux(0, TOTAL_IC, _aux_voltages); //Parse all ADC measurements back
 
         // Grab aux voltages into the temp voltages array
         for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
             //Sensors are in reverse order, 0123 are 2_2, 2_1, 1_2, and 1_1 respectively
-            temp_sensor_voltages[ic][MUX_CHANNELS-1-i] = _aux_voltages[ic][0]; //Store temperatures
+            temp_sensor_voltages[ic][NUM_TEMPS-1-i] = _aux_voltages[ic][0]; //Store temperatures
         }
     }
 
     for( int ic = 0; ic < TOTAL_IC; ic++) {
         char temp_msg[128] = "";
-        sprintf(temp_msg, "t%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", ic, error,
+        sprintf(temp_msg, "t%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", ic, error,
                         temp_sensor_voltages[ic][0],
                         temp_sensor_voltages[ic][1],
                         temp_sensor_voltages[ic][2],
@@ -220,7 +221,17 @@ uint8_t read_all_temperatures(void)
                         temp_sensor_voltages[ic][6],
                         temp_sensor_voltages[ic][7],
                         temp_sensor_voltages[ic][8],
-                        temp_sensor_voltages[ic][9]
+                        temp_sensor_voltages[ic][9],
+                        temp_sensor_voltages[ic][10],
+                        temp_sensor_voltages[ic][11],
+                        temp_sensor_voltages[ic][12],
+                        temp_sensor_voltages[ic][13],
+                        temp_sensor_voltages[ic][14],
+                        temp_sensor_voltages[ic][15],
+                        temp_sensor_voltages[ic][16],
+                        temp_sensor_voltages[ic][17],
+                        temp_sensor_voltages[ic][18],
+                        temp_sensor_voltages[ic][19]
                         );
 
         LOG_println(temp_msg, strlen(temp_msg));
@@ -269,7 +280,7 @@ int main (void) {
             gFlag &= ~TRANSMIT_STATUS;
 
             uint8_t error = 0;
-            error += read_all_voltages();
+            // error += read_all_voltages();
             error += read_all_temperatures();
 
             // If we got a PEC error from any of those
