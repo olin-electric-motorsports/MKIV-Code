@@ -417,7 +417,7 @@ void wrcomm(uint8_t total_ic, //The number of ICs being written to
 
     SPI_start();
     uint8_t null;
-    SPI_write_then_read(cmd, 4, &null, 0);
+    SPI_write_then_read(cmd, CMD_LEN, &null, 0);
     SPI_end();
 }
 
