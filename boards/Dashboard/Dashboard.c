@@ -63,6 +63,10 @@ Author:
 #define RTD_LD                             PC5
 #define RTD_PORT                           PORTC
 
+/* Steering Pot*/
+#define STEERING_POT                       PD5
+#define PORT_STEERING_POT                  PORTD
+
 
 // CAN Positions
 #define CAN_READY_TO_DRIVE                 0
@@ -94,6 +98,7 @@ Author:
 
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
+uint8_t gSteering = 0x00;
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 uint8_t can_recv_msg[8] = {};
 
@@ -280,8 +285,11 @@ void initIO(void) {
     //Set start pin as input
     DDRC &= ~_BV(START_PIN);
 
-    // //Set Start Pin as input pull up
+    //Set Start Pin as input pull up
     PORTC |= _BV(START_PIN);
+
+    //Set pull up resistor for steering pot
+    PORT_STEERING_POT |= _BV(STEERING_POT);
 
     /* Setup pin change interrupt registers for start pin*/
     PCICR |= _BV(PCIE1);
@@ -309,7 +317,6 @@ void initIO(void) {
     OCR1B = (uint8_t) 255;      // Duty Cycle
 
 }
-
 
 
 void updateStateFromFlags(void) {
@@ -341,8 +348,17 @@ void initADC(void) {
     //Reads by default from ADC0 (pin 11)
     //This line is redundant. The timer
     ADMUX |= _BV(0x00);
+
 }
 
+void readPorts(void){
+
+    ADMUX |= 2;
+    ADCSRA |= _BV(ADSC);
+    uint8_t steering = (uint8_t) (ADC >> 2);
+    gSteering = steering;
+
+}
 
 /*----- MAIN -----*/
 int main(void){
@@ -378,10 +394,12 @@ int main(void){
 
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
-
-            PORT_DEBUG_LED1 ^= _BV(DEBUG_LED1);
+            PORT_DEBUG_LED1 ^= _BV(DEBUG_LED1); //Timing Check
 
             updateStateFromFlags();
+            readPorts();
+
+            gCAN_MSG[1] = gSteering;
 
             CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
 
@@ -396,11 +414,6 @@ int main(void){
                 gCAN_MSG[0] = 0xFF;
                 PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
             }
-
-
-            // } else{
-
-            // }
 
 
             if(bit_is_set(gFlag, BRAKE_PRESSED)) {
@@ -420,11 +433,6 @@ int main(void){
             } else{
                 gCAN_MSG[2] = 0x00;
             }
-
-
-
         }
-
-
     }
 }
