@@ -149,6 +149,10 @@ ISR(CAN_INT_vect) {
       can_recv_msg[4] = CANMSG;   // Regen Enabled
       can_recv_msg[5] = CANMSG;   // Current Limiting Enabled
       can_recv_msg[6] = CANMSG;   // Cell Balancing Status
+      
+      curr_SoC = can_recv_msg[2];
+      uint8_t avg_SoC = curr_SoC / 0xFF;
+      OCR1B = avg_SoC;      
 
       // Grab BMS fault light
       if(can_recv_msg[3] == 0x00) {
@@ -222,7 +226,8 @@ ISR(CAN_INT_vect) {
         can_recv_msg[4] = CANMSG;   // estop
 
         throttle = can_recv_msg[0];
-        OCR1A = can_recv_msg[0];
+        uint8_t throttle_avg = throttle / 0xFF;
+        OCR1A = throttle_avg;
 
 
         //Setup to Receive Again
@@ -286,8 +291,8 @@ void initIO(void) {
 
     /*----- Setup PWM output -----*/
     //Output compare pin is OC1B, so we need OCR1B as our counter
-    DDRD |= _BV(PD2); //Enable output pin
-    DDRD |= _BV(PD3); //Enable output pin
+    DDRC |= _BV(PC0); //Enable output pin
+    DDRC |= _BV(PC1); //Enable output pin
     DDRC |= _BV(PC1);
 
     // pg 119 and 110 of datasheet
@@ -383,17 +388,13 @@ int main(void){
 
 
             if(bit_is_clear(gCAN_MSG,CAN_READY_TO_DRIVE) && bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
-            //if(bit_is_set(gFlag,STATUS_START)) {
-                gCAN_MSG[0] = 0xFF;
-                PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
 
                 RTD_PORT |= _BV(RTD_LD);
-                _delay_ms(400);
+                _delay_ms(1000);
                 RTD_PORT &= ~(_BV(RTD_LD));
 
-                // if(bit_is_clear(gFlag, PRECHARGE)){
-                //   gCAN_MSG[0] = 0x00;
-                // }
+                gCAN_MSG[0] = 0xFF;
+                PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
             }
 
 

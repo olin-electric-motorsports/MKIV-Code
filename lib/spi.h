@@ -36,6 +36,8 @@ void SPI_start();
 
 void SPI_transfer(uint8_t txdata, uint8_t *rxdata);
 
+void SPI_transfer_array(uint8_t *txdata, uint8_t *rxdata, uint8_t len);
+
 void SPI_end();
 
 // SPI_A functions for the alternate SPI port
