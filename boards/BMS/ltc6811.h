@@ -49,6 +49,8 @@ void SPI_write_then_read(uint8_t *tx_data, uint8_t tx_len, uint8_t* rx_data, uin
 //Generic wakeup command to wake the ltc6813 from sleep
 void wakeup_sleep(uint8_t total_ic);
 
+void wakeup_idle(uint8_t total_ic);
+
 void ltc6811_adcv(
         uint8_t MD, //ADC Mode
         uint8_t DCP, //Discharge Permit

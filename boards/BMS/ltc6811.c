@@ -35,9 +35,17 @@ void ltc6811_init(volatile uint8_t* cs_port, uint8_t cs_pin) {
 
 //Generic wakeup command to wake the ltc6813 from sleep
 void wakeup_sleep(uint8_t total_ic) {
-    for (int i =0; i<TOTAL_IC+1; i++) {
+    for (int i =0; i<total_ic+1; i++) {
         SPI_start(); // chip select
         _delay_us(300); // Guarantees the ltc6813 will be in standby
+        SPI_end();
+    }
+}
+
+void wakeup_idle(uint8_t total_ic) {
+    for (int i =0; i<total_ic+1; i++) {
+        SPI_start();
+        _delay_us(2); //Guarantees the isoSPI will be in ready mode
         SPI_end();
     }
 }

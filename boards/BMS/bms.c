@@ -95,11 +95,16 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     int8_t error = 0;
 
     wakeup_sleep(TOTAL_IC);
-    // Start a cell conversion with dicharge disabled on all cells
+    // Start a cell conversion on all cells
     ltc6811_adcv(MD_7KHZ_3KHZ, DCP_ENABLED, CELL_CH_ALL);
     // wait until ADC is finished(SEE LTC 6804 Datasheet Pg. 24)
-    _delay_ms(3);
+    // Trefup is 4.4 mS max, plus 2.3mS conversion time for 7kHz mode
+
+    //_delay_ms(7);
+    ltc6811_pollAdc();
+
     //Read back and parse out ADC measurements
+    wakeup_idle(TOTAL_IC); // Wake up the LTC6804 from idle after the delay
     error = ltc6811_rdcv(TOTAL_IC, cell_voltages);
 
     if (error == 0) {
@@ -126,8 +131,8 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     // TODO very slow, comment out after inspection ****************************
     // UART out cell voltages as 10  16-bit ints
     for (int i = 0; i < TOTAL_IC; i++) {
-        char tmp_msg[108] = "";
-        sprintf(tmp_msg, "v%d,%u,%u,%u,%u,%u,"
+        char tmp_msg[116] = "";
+        sprintf(tmp_msg, "v%d,%3d,%u,%u,%u,%u,"
                          "%u,%u,%u,%u,"
                          "%u,%u",
                           i,
@@ -160,16 +165,21 @@ uint8_t read_all_temperatures(void)
 
     const uint8_t MUX_CHANNELS = 8;
 
+    wakeup_sleep(TOTAL_IC);
+
     // Disable all MUXes
     mux_disable(TOTAL_IC, MUX1_ADDR);
+    _delay_us(10);
     mux_disable(TOTAL_IC, MUX2_ADDR);
+    _delay_us(10);
     mux_disable(TOTAL_IC, MUX3_ADDR);
+    _delay_us(10);
 
     // First four thermistors are in MUX3
     for (uint8_t i = 0; i < 4; i++) {
 
         mux_set_channel(TOTAL_IC, MUX3_ADDR, i);
-        _delay_us(5);                             //Spec is 1600ns from stop cond.
+        _delay_us(10);                             //Spec is 1600ns from stop cond.
         ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement for GPIO CH 1
         ltc6811_pollAdc();
         error = ltc6811_rdaux(0,TOTAL_IC, _aux_voltages); //Parse all ADC measurements back
@@ -188,7 +198,7 @@ uint8_t read_all_temperatures(void)
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
 
         mux_set_channel(TOTAL_IC, MUX2_ADDR, i);
-        _delay_us(5);                             //Spec is 1600ns from stop cond.
+        _delay_us(10);                             //Spec is 1600ns from stop cond.
         ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement for GPIO CH 1
         ltc6811_pollAdc();//only need to delay 500uS for GPIO1 conversion
         error = ltc6811_rdaux(0, TOTAL_IC, _aux_voltages); //Parse all ADC measurements back
@@ -206,7 +216,7 @@ uint8_t read_all_temperatures(void)
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
 
         mux_set_channel(TOTAL_IC, MUX1_ADDR, i);
-        _delay_us(5);                             //Spec is 1600ns from stop cond.
+        _delay_us(10);                             //Spec is 1600ns from stop cond.
         ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement for GPIO CH 1
         ltc6811_pollAdc();                           //only need to delay 500uS for GPIO1 conversion
         error = ltc6811_rdaux(0, TOTAL_IC, _aux_voltages); //Parse all ADC measurements back
@@ -221,8 +231,8 @@ uint8_t read_all_temperatures(void)
     mux_disable(TOTAL_IC, MUX1_ADDR);
 
     for(int ic = 0; ic < TOTAL_IC; ic++) {
-        char temp_msg[128] = "";
-        sprintf(temp_msg, "t%d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
+        char temp_msg[196] = "";
+        sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
                         temp_sensor_voltages[ic][0],
                         temp_sensor_voltages[ic][1],
                         temp_sensor_voltages[ic][2],
@@ -250,15 +260,16 @@ uint8_t read_all_temperatures(void)
 
     // Check temperature values for in-range ness
     gFlag &= ~(OVER_TEMP | SOFT_OVER_TEMP | UNDER_TEMP);
+    LED_PORT &= ~_BV(LED3_PIN);
 
     for (uint8_t ic = 0; ic < TOTAL_IC; ic ++) {
         for (uint8_t sensor = 0; sensor < NUM_TEMPS; sensor ++) {
             if (temp_sensor_voltages[ic][sensor] < SOFT_OT_THRESHOLD) {
                 gFlag |= SOFT_OVER_TEMP;
+                LED_PORT |= _BV(LED3_PIN);
             }
             if (temp_sensor_voltages[ic][sensor] < OT_THRESHOLD) {
                 gFlag |= OVER_TEMP;
-                LED_PORT |= _BV(LED3_PIN);
             }
             if (temp_sensor_voltages[ic][sensor] > UT_THRESHOLD) {
                 gFlag |= UNDER_TEMP;
@@ -304,7 +315,7 @@ int main (void) {
             gFlag &= ~TRANSMIT_STATUS;
 
             uint8_t error = 0;
-            // error += read_all_voltages();
+            error += read_all_voltages();
             error += read_all_temperatures();
 
             // If we got a PEC error from any of those
