@@ -11,6 +11,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include "can_api.h"
+//#include "log_uart.h"
 
 /*----- Outputs -----*/
 #define LED1				PC4
@@ -43,6 +44,12 @@
 #define INREG_SS_IMD			 PINC
 #define PIN_SS_BMS					PC1 // PCINT9
 #define INREG_SS_BMS			 PINC
+
+#define PIN_COOLING_PUMP				PB7 // PCINT7  ADC4
+#define INREG_COOLING_PUMP		PINB
+#define COOLING_UPPER_BOUND 	700; //arbitrary until tested -Corey
+#define COOLING_LOWER_BOUND	300; //^
+
 
 /*----- Fault Codes -----*/
 #define FAULT_CODE_GENERAL										0X00
@@ -303,7 +310,35 @@ void checkAIRMINUS (void) {
 }
 
 void updateCoolingPressure (void) { // TODO where is this going in CAN?
-		// TODO
+				    // not currently in CAN. we'd have to change the CAN api
+				    // and re-flash every board to do it properly. Not worth
+				    // the effort in my opinion. -Corey 5.29.19
+		
+		//uncomment to disable pull-up if need be 
+		//PORTB &= ~_BV(PIN_COOLING_PUMP);
+			
+		ADMUX = _BV(REFS0);
+		ADMUX |= 4; //Cooling pressure pin is ADC4
+    		ADCSRA |= _BV(ADSC);
+    		loop_until_bit_is_clear(ADCSRA, ADSC);
+    		uint16_t val = ADC;
+		
+		if(val>COOLING_UPPER_BOUND){
+			//cooling pump is on
+		}else if(val<COOLING_LOWER_BOUND){
+			//coolling pump is off
+		}else{
+			//charging
+		}
+
+		// Uncomment when we need it. -Corey
+		// Don't forget to uncomment the .h file at the top
+		//LOG_init();
+		//char uart_buf[64];
+  		//sprintf(uart_buf, "Cooling Pressure: %d", val);
+  		//LOG_println(uart_buf, strlen(uart_buf));
+
+
 }
 
 void conditionalMessageSet (uint8_t reg, uint8_t bit, uint8_t msg[], uint8_t index, uint8_t condHigh, uint8_t condLow) {
@@ -352,6 +387,7 @@ int main (void) {
 		PCMSK2 |= _BV(PCINT16);
 
 		setOutputs();
+		PORTB |= _BV(PIN_COOLING_PUMP); \\ Set internal pull up resistor - idk where to put this -Corey	
 		readAllInputs(); // in case they are set high before micro starts up and therefore won't trigger an interrupt
 
     while(1) {
