@@ -72,6 +72,7 @@
 #define FLAG_IMD_STATUS     3
 #define FLAG_BMS_STATUS     4
 #define FLAG_TSMS_STATUS		5
+#define 
 
 /*----- sFlag -----*/
 #define FLAG_SS_HVD   0
@@ -313,16 +314,16 @@ void updateCoolingPressure (void) { // TODO where is this going in CAN?
 				    // not currently in CAN. we'd have to change the CAN api
 				    // and re-flash every board to do it properly. Not worth
 				    // the effort in my opinion. -Corey 5.29.19
-		
-		//uncomment to disable pull-up if need be 
+
+		//uncomment to disable pull-up if need be
 		//PORTB &= ~_BV(PIN_COOLING_PUMP);
-			
+
 		ADMUX = _BV(REFS0);
 		ADMUX |= 4; //Cooling pressure pin is ADC4
     		ADCSRA |= _BV(ADSC);
     		loop_until_bit_is_clear(ADCSRA, ADSC);
     		uint16_t val = ADC;
-		
+
 		if(val>COOLING_UPPER_BOUND){
 			//cooling pump is on
 		}else if(val<COOLING_LOWER_BOUND){
@@ -387,7 +388,7 @@ int main (void) {
 		PCMSK2 |= _BV(PCINT16);
 
 		setOutputs();
-		PORTB |= _BV(PIN_COOLING_PUMP); \\ Set internal pull up resistor - idk where to put this -Corey	
+		PORTB |= _BV(PIN_COOLING_PUMP); \\ Set internal pull up resistor - idk where to put this -Corey
 		readAllInputs(); // in case they are set high before micro starts up and therefore won't trigger an interrupt
 
     while(1) {
@@ -403,12 +404,16 @@ int main (void) {
 				sendCriticalCANMessage();
 
 				if(tractiveSystemStatus==TS_STATUS_DEENERGIZED){
+						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay, sanity check
+						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus, sanity check
 						if(bit_is_set(gFlag, FLAG_TSMS_STATUS)){ // if tsms closed
 							tractiveSystemStatus = TS_STATUS_PRECHARGE_DELAY; // set status to precharge delay
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGE_DELAY) {
-						if(motorControllerVoltage > 0){ // if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
+						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
+							tractiveSystemStatus = TS_STATUS_DEENERGIZED;
+						} else if(motorControllerVoltage > 0){ // if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
 							panic(FAULT_CODE_PRECHARGE_STUCK);
 						} else if(timer1OverflowCount>OVF_COUNT_PRECHARGE_DELAY){ // if precharge delay time elapsed
 							tractiveSystemStatus = TS_STATUS_PRECHARGING; // set status to precharging
@@ -417,7 +422,10 @@ int main (void) {
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGING) {
-						if(timer1OverflowCount>OVF_COUNT_PRECHARGING){ // if precharging time elapsed
+					if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
+						tractiveSystemStatus = TS_STATUS_DISCHARGING;
+						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
+					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){ // if precharging time elapsed
 							if(motorControllerVoltage == 0){ // if voltage is 0
 								panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS); // panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS)
 							} else if(motorControllerVoltage>MINIMUM_VOLTAGE_AFTER_PRECHARGE){ // if voltage is high enough
@@ -433,7 +441,7 @@ int main (void) {
 							}
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){ // if tsms node no longer has shutdown voltage
+						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS) || bit_is_clear()){ // if tsms node no longer has shutdown voltage
 							AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 							tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
