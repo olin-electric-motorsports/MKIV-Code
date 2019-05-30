@@ -72,7 +72,7 @@
 #define FLAG_IMD_STATUS     3
 #define FLAG_BMS_STATUS     4
 #define FLAG_TSMS_STATUS		5
-#define 
+#define FLAG_COOLING_STATUS	6
 
 /*----- sFlag -----*/
 #define FLAG_SS_HVD   0
@@ -441,7 +441,7 @@ int main (void) {
 							}
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS) || bit_is_clear()){ // if tsms node no longer has shutdown voltage
+						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS) || bit_is_clear(gFlag, FLAG_COOLING_STATUS)){ // if tsms node no longer has shutdown voltage
 							AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 							tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
