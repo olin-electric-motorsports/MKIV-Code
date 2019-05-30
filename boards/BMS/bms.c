@@ -41,7 +41,10 @@ uint8_t gBMSStatus = 0;
 
 // Timer prescale vars and constants
 uint8_t gCounterTransmit = 0;
-const uint8_t transmit_match = 100;
+const uint8_t transmit_match = 200;
+
+// UART buffer
+char temp_msg[6*20+4+5] = "";
 
 //Under Voltage and Over Voltage Thresholds
 const uint16_t OV_THRESHOLD = 42000;//35900; // Over voltage threshold ADC Code
@@ -129,28 +132,25 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
         }
     }
 
-    // TODO very slow, comment out after inspection ****************************
-    // UART out cell voltages as 10  16-bit ints
-    // char tmp_msg[1+4+4+6*10] = "";
-    // for (int i = 0; i < TOTAL_IC; i++) {
-    //     sprintf(tmp_msg, "v%d,%3d,%u,%u,%u,%u,"
-    //                      "%u,%u,%u,%u,"
-    //                      "%u,%u",
-    //                       i,
-    //                       error,
-    //                       cell_voltages[i][0],
-    //                       cell_voltages[i][1],
-    //                       cell_voltages[i][2],
-    //                       cell_voltages[i][3],
-    //                       cell_voltages[i][4],
-    //                       cell_voltages[i][6],
-    //                       cell_voltages[i][7],
-    //                       cell_voltages[i][8],
-    //                       cell_voltages[i][9],
-    //                       cell_voltages[i][10]);
-    //
-    //     LOG_println(tmp_msg, strlen(tmp_msg));
-    // }
+    for (int i = 0; i < TOTAL_IC; i++) {
+        sprintf(temp_msg, "v%d,%3d,%u,%u,%u,%u,"
+                         "%u,%u,%u,%u,"
+                         "%u,%u",
+                          i,
+                          error,
+                          cell_voltages[i][0],
+                          cell_voltages[i][1],
+                          cell_voltages[i][2],
+                          cell_voltages[i][3],
+                          cell_voltages[i][4],
+                          cell_voltages[i][6],
+                          cell_voltages[i][7],
+                          cell_voltages[i][8],
+                          cell_voltages[i][9],
+                          cell_voltages[i][10]);
+
+        LOG_println(temp_msg, strlen(temp_msg));
+    }
 
     return error;
 }
@@ -234,33 +234,32 @@ uint8_t read_all_temperatures(void)
     mux_disable(TOTAL_IC, MUX1_ADDR);
     _delay_us(10);
 
-    // char temp_msg[6*sizeof(char)+8] = "";
-    // for(int ic = 0; ic < TOTAL_IC; ic++) {
-    //     sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
-    //                     temp_sensor_voltages[ic][0],
-    //                     temp_sensor_voltages[ic][1],
-    //                     temp_sensor_voltages[ic][2],
-    //                     temp_sensor_voltages[ic][3],
-    //                     temp_sensor_voltages[ic][4],
-    //                     temp_sensor_voltages[ic][5],
-    //                     temp_sensor_voltages[ic][6],
-    //                     temp_sensor_voltages[ic][7],
-    //                     temp_sensor_voltages[ic][8],
-    //                     temp_sensor_voltages[ic][9],
-    //                     temp_sensor_voltages[ic][10],
-    //                     temp_sensor_voltages[ic][11],
-    //                     temp_sensor_voltages[ic][12],
-    //                     temp_sensor_voltages[ic][13],
-    //                     temp_sensor_voltages[ic][14],
-    //                     temp_sensor_voltages[ic][15],
-    //                     temp_sensor_voltages[ic][16],
-    //                     temp_sensor_voltages[ic][17],
-    //                     temp_sensor_voltages[ic][18],
-    //                     temp_sensor_voltages[ic][19]
-    //                     );
-    //
-    //     LOG_println(temp_msg, strlen(temp_msg));
-    // }
+    for(int ic = 0; ic < TOTAL_IC; ic++) {
+        sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
+                        temp_sensor_voltages[ic][0],
+                        temp_sensor_voltages[ic][1],
+                        temp_sensor_voltages[ic][2],
+                        temp_sensor_voltages[ic][3],
+                        temp_sensor_voltages[ic][4],
+                        temp_sensor_voltages[ic][5],
+                        temp_sensor_voltages[ic][6],
+                        temp_sensor_voltages[ic][7],
+                        temp_sensor_voltages[ic][8],
+                        temp_sensor_voltages[ic][9],
+                        temp_sensor_voltages[ic][10],
+                        temp_sensor_voltages[ic][11],
+                        temp_sensor_voltages[ic][12],
+                        temp_sensor_voltages[ic][13],
+                        temp_sensor_voltages[ic][14],
+                        temp_sensor_voltages[ic][15],
+                        temp_sensor_voltages[ic][16],
+                        temp_sensor_voltages[ic][17],
+                        temp_sensor_voltages[ic][18],
+                        temp_sensor_voltages[ic][19]
+                        );
+
+        LOG_println(temp_msg, strlen(temp_msg));
+    }
 
     if (error == 0) {
         // Check temperature values for in-range ness
