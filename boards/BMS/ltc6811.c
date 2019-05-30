@@ -72,7 +72,10 @@ void ltc6811_adcv(
     SPI_start();
     uint8_t null;
     SPI_write_then_read(cmd, 4, &null, 0);
+
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
     SPI_end();
+    _delay_us(4);
 }
 
 // THIS FUNCTION DOES NOT WORK ON LTC6804 *************************************
@@ -88,7 +91,7 @@ uint32_t ltc6811_pollAdc(void)
 
     cmd[0] = 0x07;
     cmd[1] = 0x14;
-    cmd_pec = pec15_calc(2, cmd); //TODO: what is pec15_calc?
+    cmd_pec = pec15_calc(2, cmd);
     cmd[2] = (uint8_t)(cmd_pec >> 8);
     cmd[3] = (uint8_t)(cmd_pec);
 
@@ -111,7 +114,9 @@ uint32_t ltc6811_pollAdc(void)
         }
     }
 
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
     SPI_end();
+    _delay_us(4);
 
     return counter;
 }
@@ -229,7 +234,10 @@ void _ltc6811_rdcv_reg(uint8_t reg, //Determines which cell voltage register is 
 
     SPI_start();
     SPI_write_then_read(cmd, 4, data, (REG_LEN * total_ic));
+
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
     SPI_end();
+    _delay_us(4);
 }
 
 //Start a GPIO and Vref2 Conversion
@@ -256,7 +264,10 @@ void ltc6811_adax(
     SPI_start();
     uint8_t null;
     SPI_write_then_read(cmd, 4, &null, 0);
+
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
     SPI_end();
+    _delay_us(4);
 }
 
 /*
@@ -381,7 +392,10 @@ void _ltc6811_rdaux_reg(uint8_t reg, //Determines which GPIO voltage register is
 
     SPI_start(); //set CS low
     SPI_write_then_read(cmd,4,data,(REG_LEN*total_ic));
-    SPI_end(); //set CS high
+
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
+    SPI_end();
+    _delay_us(4);
 }
 
 /*
@@ -426,7 +440,10 @@ void wrcomm(uint8_t total_ic, //The number of ICs being written to
     SPI_start();
     uint8_t null;
     SPI_write_then_read(cmd, CMD_LEN, &null, 0);
+
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
     SPI_end();
+    _delay_us(4);
 }
 
 /*
@@ -455,7 +472,9 @@ void stcomm(void)
         SPI_transfer(0xFF, &null[0]);
     }
 
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
     SPI_end();
+    _delay_us(4);
 }
 
 /*
@@ -484,7 +503,10 @@ int8_t rdcomm(uint8_t total_ic, //Number of ICs in the system
     //wakeup_idle (); //This will guarantee that the ltc6811 isoSPI port is awake. This command can be removed.
     SPI_start();
     SPI_write_then_read(cmd, 4, rx_data, (BYTES_IN_REG*total_ic));         //Read the configuration data of all ICs on the daisy chain into
-    SPI_end(); //set CS high
+
+    _delay_us(4); //For up to 15 boards in series. See pg 69 in the ltc6804 datasheet.
+    SPI_end();
+    _delay_us(4);
 
     for (uint8_t current_ic = 0; current_ic < total_ic; current_ic++)       //executes for each ltc6811 in the daisy chain and packs the data
     {

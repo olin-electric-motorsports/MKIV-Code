@@ -109,6 +109,8 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 
     if (error == 0) {
         // Do value checking
+        gFlag &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
+
         for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
             for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
 
@@ -119,10 +121,9 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 
                 if (cell_value > OV_THRESHOLD) {
                     gFlag |= OVER_VOLTAGE;
-                } else if (cell_value < UV_THRESHOLD) {
+                }
+                if (cell_value < UV_THRESHOLD) {
                     gFlag |= UNDER_VOLTAGE;
-                } else {
-                    gFlag &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
                 }
             }
         }
@@ -130,26 +131,26 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 
     // TODO very slow, comment out after inspection ****************************
     // UART out cell voltages as 10  16-bit ints
-    for (int i = 0; i < TOTAL_IC; i++) {
-        char tmp_msg[116] = "";
-        sprintf(tmp_msg, "v%d,%3d,%u,%u,%u,%u,"
-                         "%u,%u,%u,%u,"
-                         "%u,%u",
-                          i,
-                          error,
-                          cell_voltages[i][0],
-                          cell_voltages[i][1],
-                          cell_voltages[i][2],
-                          cell_voltages[i][3],
-                          cell_voltages[i][4],
-                          cell_voltages[i][6],
-                          cell_voltages[i][7],
-                          cell_voltages[i][8],
-                          cell_voltages[i][9],
-                          cell_voltages[i][10]);
-
-        LOG_println(tmp_msg, strlen(tmp_msg));
-    }
+    // char tmp_msg[1+4+4+6*10] = "";
+    // for (int i = 0; i < TOTAL_IC; i++) {
+    //     sprintf(tmp_msg, "v%d,%3d,%u,%u,%u,%u,"
+    //                      "%u,%u,%u,%u,"
+    //                      "%u,%u",
+    //                       i,
+    //                       error,
+    //                       cell_voltages[i][0],
+    //                       cell_voltages[i][1],
+    //                       cell_voltages[i][2],
+    //                       cell_voltages[i][3],
+    //                       cell_voltages[i][4],
+    //                       cell_voltages[i][6],
+    //                       cell_voltages[i][7],
+    //                       cell_voltages[i][8],
+    //                       cell_voltages[i][9],
+    //                       cell_voltages[i][10]);
+    //
+    //     LOG_println(tmp_msg, strlen(tmp_msg));
+    // }
 
     return error;
 }
@@ -194,6 +195,7 @@ uint8_t read_all_temperatures(void)
 
     // Disable MUX3, now iterate through MUX2 (for modules 3-6)
     mux_disable(TOTAL_IC, MUX3_ADDR);
+    _delay_us(10);
 
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
 
@@ -212,6 +214,7 @@ uint8_t read_all_temperatures(void)
     }
     // Disable MUX2, now iterate through MUX1 (for modules 7-10)
     mux_disable(TOTAL_IC, MUX2_ADDR);
+    _delay_us(10);
 
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
 
@@ -229,50 +232,51 @@ uint8_t read_all_temperatures(void)
     }
 
     mux_disable(TOTAL_IC, MUX1_ADDR);
+    _delay_us(10);
 
-    for(int ic = 0; ic < TOTAL_IC; ic++) {
-        char temp_msg[196] = "";
-        sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
-                        temp_sensor_voltages[ic][0],
-                        temp_sensor_voltages[ic][1],
-                        temp_sensor_voltages[ic][2],
-                        temp_sensor_voltages[ic][3],
-                        temp_sensor_voltages[ic][4],
-                        temp_sensor_voltages[ic][5],
-                        temp_sensor_voltages[ic][6],
-                        temp_sensor_voltages[ic][7],
-                        temp_sensor_voltages[ic][8],
-                        temp_sensor_voltages[ic][9],
-                        temp_sensor_voltages[ic][10],
-                        temp_sensor_voltages[ic][11],
-                        temp_sensor_voltages[ic][12],
-                        temp_sensor_voltages[ic][13],
-                        temp_sensor_voltages[ic][14],
-                        temp_sensor_voltages[ic][15],
-                        temp_sensor_voltages[ic][16],
-                        temp_sensor_voltages[ic][17],
-                        temp_sensor_voltages[ic][18],
-                        temp_sensor_voltages[ic][19]
-                        );
+    // char temp_msg[6*sizeof(char)+8] = "";
+    // for(int ic = 0; ic < TOTAL_IC; ic++) {
+    //     sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
+    //                     temp_sensor_voltages[ic][0],
+    //                     temp_sensor_voltages[ic][1],
+    //                     temp_sensor_voltages[ic][2],
+    //                     temp_sensor_voltages[ic][3],
+    //                     temp_sensor_voltages[ic][4],
+    //                     temp_sensor_voltages[ic][5],
+    //                     temp_sensor_voltages[ic][6],
+    //                     temp_sensor_voltages[ic][7],
+    //                     temp_sensor_voltages[ic][8],
+    //                     temp_sensor_voltages[ic][9],
+    //                     temp_sensor_voltages[ic][10],
+    //                     temp_sensor_voltages[ic][11],
+    //                     temp_sensor_voltages[ic][12],
+    //                     temp_sensor_voltages[ic][13],
+    //                     temp_sensor_voltages[ic][14],
+    //                     temp_sensor_voltages[ic][15],
+    //                     temp_sensor_voltages[ic][16],
+    //                     temp_sensor_voltages[ic][17],
+    //                     temp_sensor_voltages[ic][18],
+    //                     temp_sensor_voltages[ic][19]
+    //                     );
+    //
+    //     LOG_println(temp_msg, strlen(temp_msg));
+    // }
 
-        LOG_println(temp_msg, strlen(temp_msg));
-    }
+    if (error == 0) {
+        // Check temperature values for in-range ness
+        gFlag &= ~(OVER_TEMP | SOFT_OVER_TEMP | UNDER_TEMP);
 
-    // Check temperature values for in-range ness
-    gFlag &= ~(OVER_TEMP | SOFT_OVER_TEMP | UNDER_TEMP);
-    LED_PORT &= ~_BV(LED3_PIN);
-
-    for (uint8_t ic = 0; ic < TOTAL_IC; ic ++) {
-        for (uint8_t sensor = 0; sensor < NUM_TEMPS; sensor ++) {
-            if (temp_sensor_voltages[ic][sensor] < SOFT_OT_THRESHOLD) {
-                gFlag |= SOFT_OVER_TEMP;
-                LED_PORT |= _BV(LED3_PIN);
-            }
-            if (temp_sensor_voltages[ic][sensor] < OT_THRESHOLD) {
-                gFlag |= OVER_TEMP;
-            }
-            if (temp_sensor_voltages[ic][sensor] > UT_THRESHOLD) {
-                gFlag |= UNDER_TEMP;
+        for (uint8_t ic = 0; ic < TOTAL_IC; ic ++) {
+            for (uint8_t sensor = 0; sensor < NUM_TEMPS; sensor ++) {
+                if (temp_sensor_voltages[ic][sensor] < SOFT_OT_THRESHOLD) {
+                    gFlag |= SOFT_OVER_TEMP;
+                }
+                if (temp_sensor_voltages[ic][sensor] < OT_THRESHOLD) {
+                    gFlag |= OVER_TEMP;
+                }
+                if (temp_sensor_voltages[ic][sensor] > UT_THRESHOLD) {
+                    gFlag |= UNDER_TEMP;
+                }
             }
         }
     }
@@ -306,6 +310,7 @@ int main (void) {
     if (!(gFlag & (OVER_TEMP | UNDER_TEMP | OVER_VOLTAGE | UNDER_VOLTAGE))) {
         RELAY_PORT |= _BV(RELAY_PIN);
         gBMSStatus = 0xFF;
+        LED_PORT |= _BV(LED3_PIN);
     }
 
     while (1) {
@@ -353,6 +358,7 @@ int main (void) {
 
             RELAY_PORT &= ~_BV(RELAY_PIN);
             gBMSStatus = 0x00;
+            LED_PORT &= ~_BV(LED3_PIN);
         }
 
     }
