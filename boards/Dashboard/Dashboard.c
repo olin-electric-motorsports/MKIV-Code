@@ -154,17 +154,15 @@ ISR(CAN_INT_vect) {
       can_recv_msg[4] = CANMSG;   // Regen Enabled
       can_recv_msg[5] = CANMSG;   // Current Limiting Enabled
       can_recv_msg[6] = CANMSG;   // Cell Balancing Status
+
+      OCR1B = can_recv_msg[3]; //SoC for PWM
       
-      curr_SoC = can_recv_msg[2];
-      uint8_t avg_SoC = curr_SoC / 0xFF;
-      OCR1B = avg_SoC;      
 
       // Grab BMS fault light
       if(can_recv_msg[3] == 0x00) {
-          gFlag |= _BV(BMS_LIGHT);   // If BMS shutdown is true, make BMS_PIN high
-      }
+          gFlag |= _BV(BMS_LIGHT);   // If BMS shutdown is low, turn light pin high
 
-
+      } 
       //Setup to Receive Again
       CANSTMOB = 0x00;
       CAN_wait_on_receive(BMS_CORE_MBOX, CAN_ID_BMS_CORE, CAN_LEN_BMS_CORE, CAN_MSK_SINGLE);
@@ -182,8 +180,8 @@ ISR(CAN_INT_vect) {
 
 
       // Grab IMD status
-      if(can_recv_msg[5] == 0xFF) {
-          gFlag |= _BV(IMD_STATUS);
+      if(can_recv_msg[5] == 0x00) {
+          gFlag |= _BV(IMD_STATUS); //If IMD status is low, set light pin high
       }
 
       // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
@@ -230,9 +228,7 @@ ISR(CAN_INT_vect) {
         can_recv_msg[3] = CANMSG;   // inertia
         can_recv_msg[4] = CANMSG;   // estop
 
-        throttle = can_recv_msg[0];
-        uint8_t throttle_avg = throttle / 0xFF;
-        OCR1A = throttle_avg;
+        OCR1A = can_recv_msg[0]; //Throttle for PWM
 
 
         //Setup to Receive Again
@@ -253,6 +249,14 @@ ISR(PCINT1_vect) {
         gFlag &= ~_BV(STATUS_START);
         PORT_DEBUG_LED2 &= ~_BV(DEBUG_LED2);
     }
+}
+
+ISR(PCINT2_vect){
+  if(bit_is_set(PIND,PD2)){
+    PORTC |= _BV(PC0);
+  }else{
+    PORTC &= ~_BV(PC0);
+  }
 }
 
 ISR(TIMER0_COMPA_vect) {
@@ -281,6 +285,7 @@ void initIO(void) {
 
     DDRB |= _BV(DEBUG_LED1) | _BV(DEBUG_LED2) | _BV(DEBUG_LED3) | _BV(RJ_LED1) | _BV(RJ_LED2) | _BV(IMD_LED) | _BV(START_LED);
     DDRC |= _BV(RTD_LD) | _BV(BMS_LED);
+    PORT_BMS_LED &= ~_BV(BMS_LED);
 
     //Set start pin as input
     DDRC &= ~_BV(START_PIN);
@@ -291,9 +296,12 @@ void initIO(void) {
     //Set pull up resistor for steering pot
     PORT_STEERING_POT |= _BV(STEERING_POT);
 
+    PORTC |= _BV(PC0);
+
     /* Setup pin change interrupt registers for start pin*/
-    PCICR |= _BV(PCIE1);
+    PCICR |= _BV(PCIE1) | _BV(PCIE2);
     PCMSK1 |= _BV(PCINT14);
+    PCMSK2 |= _BV(PCINT18);
 
 
 
@@ -301,7 +309,9 @@ void initIO(void) {
     //Output compare pin is OC1B, so we need OCR1B as our counter
     DDRC |= _BV(PC0); //Enable output pin
     DDRC |= _BV(PC1); //Enable output pin
-    DDRC |= _BV(PC1);
+
+    // DDRD |= _BV(PD3);
+    DDRD |= _BV(PD2); //PWM is happening on this pin
 
     // pg 119 and 110 of datasheet
     // currently running on mode 5 for 8-bit resolution timer
@@ -313,8 +323,8 @@ void initIO(void) {
     TCCR1B &= ~_BV(WGM13);
 
 
-    OCR1A = (uint8_t) 30;       // Duty Cycle
-    OCR1B = (uint8_t) 255;      // Duty Cycle
+    OCR1A = (uint8_t) 115;       // Duty Cycle
+    OCR1B = (uint8_t) 127;      // Duty Cycle
 
 }
 
@@ -327,11 +337,14 @@ void updateStateFromFlags(void) {
     // Check BMS light
     if((bit_is_set(gFlag, BMS_LIGHT))) {
         PORT_BMS_LED |= _BV(BMS_LED);
+        gCAN_MSG[0] = 0x00;
+
     }
 
     // Check IMD light
     if((bit_is_set(gFlag, IMD_STATUS))) {
         PORT_IMD_LED |= _BV(IMD_LED);
+        gCAN_MSG[0] = 0x00;
     }
 }
 
@@ -370,6 +383,8 @@ int main(void){
     -Infinite loop checking shutdown state!
     */
 
+    _delay_ms(3000);
+
     // Initialize I/O
     initIO();
 
@@ -386,9 +401,6 @@ int main(void){
     initTimer();                        // Initialize Timer
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
-    PORT_START_LED |= _BV(START_LED);
-
-
 
     while(1) {
 
@@ -403,13 +415,17 @@ int main(void){
 
             CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
 
+            //COMMENT THIS OUT!!
+            //PORT_BMS_LED |= _BV(BMS_LED);
+            //PORT_IMD_LED |= _BV(IMD_LED);
 
 
+            //CHANGE TO PRECHARGE IS SET!!!!!!!!
             if(bit_is_clear(gCAN_MSG,CAN_READY_TO_DRIVE) && bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
 
-                RTD_PORT |= _BV(RTD_LD);
-                _delay_ms(1000);
-                RTD_PORT &= ~(_BV(RTD_LD));
+                // RTD_PORT |= _BV(RTD_LD);
+                // _delay_ms(1500);
+                // RTD_PORT &= ~(_BV(RTD_LD));
 
                 gCAN_MSG[0] = 0xFF;
                 PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
@@ -426,6 +442,12 @@ int main(void){
                 PORT_RJ_LED2 |= _BV(RJ_LED2);
             } else{
                 PORT_RJ_LED2 &= ~_BV(RJ_LED2);
+            }
+
+            if(bit_is_clear(gFlag, PRECHARGE) && bit_is_set(gFlag, BRAKE_PRESSED)) {
+                PORT_START_LED |= _BV(START_LED);
+            } else{
+                PORT_START_LED &= ~_BV(START_LED);
             }
 
             if(bit_is_set(gFlag, STATUS_START)) {
