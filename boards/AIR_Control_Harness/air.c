@@ -435,10 +435,10 @@ int main (void) {
 			 }*/
 
 				if(bit_is_set(gFlag, FLAG_AIRPLUS_AUX) && ~chargingStartupComplete){
-					_delay_ms(2000);
+					//_delay_ms(2000);
 					RJ45_LED_PORT |= _BV(RJ45_LED2);
 					PRECHARGE_PORT |= _BV(PRECHARGE_CTRL);
-					_delay_ms(6000);
+					_delay_ms(2000);
 					AIRMINUS_PORT |= _BV(AIRMINUS_CTRL);
 					PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
 					chargingStartupComplete = 1;
