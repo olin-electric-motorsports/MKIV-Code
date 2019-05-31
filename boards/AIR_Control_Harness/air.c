@@ -6,12 +6,13 @@
 */
 
 /*----- Includes -----*/
+#include <stdio.h>
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include "can_api.h"
-//#include "log_uart.h"
+#include "log_uart.h"
 
 /*----- Outputs -----*/
 #define LED1				PC4
@@ -28,8 +29,8 @@
 #define AIRMINUS_PORT			PORTB
 
 /*----- Inputs -----*/
-#define PIN_AIRMINUS_AUX		PC7 // PCINT15
 #define PIN_AIRPLUS_AUX			PC6 // PCINT14
+#define PIN_AIRMINUS_AUX		PC7 // PCINT15
 #define INREG_AIRS				 PINC // INREG -> input register
 
 #define PIN_BMS_STATUS			PB2 // PCINT2
@@ -45,10 +46,8 @@
 #define PIN_SS_BMS					PC1 // PCINT9
 #define INREG_SS_BMS			 PINC
 
-#define PIN_COOLING_PUMP				PB7 // PCINT7  ADC4
-#define INREG_COOLING_PUMP		PINB
-#define COOLING_UPPER_BOUND 	700; //arbitrary until tested -Corey
-#define COOLING_LOWER_BOUND	300; //^
+#define PIN_COOLING_PRESSURE		  	PB7 // PCINT7  ADC4
+#define INREG_COOLING_PRESSURE		 PINB
 
 
 /*----- Fault Codes -----*/
@@ -66,13 +65,13 @@
 #define FAULT_CODE_PRECHARGE_INCOMPLETE				0X0B // if precharge is too slow or stopping below MINIMUM_VOLTAGE_AFTER_PRECHARGE
 
 /*----- gFlag -----*/
-#define UPDATE_STATUS       0
-#define FLAG_AIRPLUS_AUX    1
-#define FLAG_AIRMINUS_AUX   2
-#define FLAG_IMD_STATUS     3
-#define FLAG_BMS_STATUS     4
-#define FLAG_TSMS_STATUS		5
-#define FLAG_COOLING_STATUS	6
+#define UPDATE_STATUS       	0
+#define FLAG_AIRPLUS_AUX    	1
+#define FLAG_AIRMINUS_AUX   	2
+#define FLAG_IMD_STATUS     	3
+#define FLAG_BMS_STATUS     	4
+#define FLAG_TSMS_STATUS		  5
+#define FLAG_COOLING_PRESSURE	6
 
 /*----- sFlag -----*/
 #define FLAG_SS_HVD   0
@@ -112,6 +111,8 @@ volatile uint16_t motorControllerVoltage = 0x0000;
 uint8_t tractiveSystemStatus = 0;
 volatile uint8_t timer1OverflowCount = 0;
 
+char uart_buf[64];
+
 uint8_t msgCritical[4] = {0,0,0,0};
 #define MSG_INDEX_PRECHARGE_STATUS	0
 #define MSG_INDEX_AIRPLUS_AUX				1
@@ -145,7 +146,7 @@ ISR(TIMER1_OVF_vect) {
 		timer1OverflowCount++;
 }
 
-ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD
+ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD, COOLING_PRESSURE
     if(bit_is_set(INREG_BMS_STATUS,PIN_BMS_STATUS)){
 		 gFlag |= _BV(FLAG_BMS_STATUS);
 		} else {
@@ -163,11 +164,19 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD
 		} else {
 		 sFlag &= ~_BV(FLAG_SS_HVD);
 		}
+
+		if(bit_is_clear(INREG_COOLING_PRESSURE,PIN_COOLING_PRESSURE)){
+		 gFlag |= _BV(FLAG_COOLING_PRESSURE);
+		} else {
+		 gFlag &= ~_BV(FLAG_COOLING_PRESSURE);
+		}
 }
 
 ISR(PCINT1_vect) { // PCINT8-15 -> AIRPLUS_AUX, AIRMINUS_AUX, SS_IMD, SS_BMS
 		if(bit_is_set(INREG_AIRS,PIN_AIRPLUS_AUX)){
 		 gFlag |= _BV(FLAG_AIRPLUS_AUX);
+		 //char plus[]="plus";
+		 //LOG_println(plus, strlen(plus));
 		} else {
 		 gFlag &= ~_BV(FLAG_AIRPLUS_AUX);
 		}
@@ -310,7 +319,20 @@ void checkAIRMINUS (void) {
 		}
 }
 
-void updateCoolingPressure (void) { // TODO where is this going in CAN?
+void ADC_init(void) {
+    /* Get the Analog to Digital Converter started (ADC)
+     * Set ADC Enable, and set AD Prescaler to 0x101
+     * Divides clock frequency by 32 for AD clock */
+    ADCSRA |= _BV(ADEN) | _BV(ADPS2) | _BV(ADPS0);
+
+    //Enable interal reference voltage
+    ADCSRB &= _BV(AREFEN);
+
+    //Set internal reference voltage as AVcc
+    ADMUX |= _BV(REFS0);
+}
+
+uint8_t adcReadCoolingPin (void) { // TODO where is this going in CAN?
 				    // not currently in CAN. we'd have to change the CAN api
 				    // and re-flash every board to do it properly. Not worth
 				    // the effort in my opinion. -Corey 5.29.19
@@ -320,25 +342,22 @@ void updateCoolingPressure (void) { // TODO where is this going in CAN?
 
 		ADMUX = _BV(REFS0);
 		ADMUX |= 4; //Cooling pressure pin is ADC4
-    		ADCSRA |= _BV(ADSC);
-    		loop_until_bit_is_clear(ADCSRA, ADSC);
-    		uint16_t val = ADC;
-
-		if(val>COOLING_UPPER_BOUND){
-			//cooling pump is on
-		}else if(val<COOLING_LOWER_BOUND){
-			//coolling pump is off
-		}else{
-			//charging
-		}
+		ADCSRA |= _BV(ADSC);
+		loop_until_bit_is_clear(ADCSRA, ADSC);
+		uint16_t val = ADC;
 
 		// Uncomment when we need it. -Corey
 		// Don't forget to uncomment the .h file at the top
 		//LOG_init();
 		//char uart_buf[64];
-  		//sprintf(uart_buf, "Cooling Pressure: %d", val);
-  		//LOG_println(uart_buf, strlen(uart_buf));
+  	sprintf(uart_buf, "Cooling Pressure: %d", val);
+  	LOG_println(uart_buf, strlen(uart_buf));
 
+		if(val>200 && val<800){
+			return 1;
+		} else {
+			return 0;
+		}
 
 }
 
@@ -378,18 +397,56 @@ int main (void) {
 		initTimer1();
     sei(); //Inititiates interrupts for the ATMega
     CAN_init(CAN_ENABLED);
+		ADC_init();
+		LOG_init();
     CAN_wait_on_receive(MOB_MOTORCONTROLLER, CAN_ID_MC_VOLTAGE, CAN_LEN_MC_VOLTAGE, CAN_MSK_SINGLE);
 		CAN_wait_on_receive(MOB_BRAKELIGHT, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
 
     // Enable interrupt
     PCICR |= _BV(PCIE0) | _BV(PCIE1) | _BV(PCIE2);
-		PCMSK0 |= _BV(PCINT2) | _BV(PCINT3) | _BV(PCINT6);
-		PCMSK1 |= _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT15);
+		PCMSK0 |= _BV(PCINT2) | _BV(PCINT3) | _BV(PCINT6) | _BV(PCINT7);
+		PCMSK1 |= _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT14) | _BV(PCINT15);
 		PCMSK2 |= _BV(PCINT16);
 
 		setOutputs();
-		PORTB |= _BV(PIN_COOLING_PUMP); \\ Set internal pull up resistor - idk where to put this -Corey
+		PORTB |= _BV(PIN_COOLING_PRESSURE); // Set internal pull up resistor
 		readAllInputs(); // in case they are set high before micro starts up and therefore won't trigger an interrupt
+
+		uint8_t charging = adcReadCoolingPin();
+		uint8_t chargingStartupComplete = 0;
+
+		while(charging) {
+			if(bit_is_set(gFlag, UPDATE_STATUS)){
+
+				char chrg[]="charging";
+		  	LOG_println(chrg, strlen(chrg));
+
+				gFlag &= ~_BV(UPDATE_STATUS); // TODO IMD STATUS PIN TURNS OFF SLOW DEBUG
+				RJ45_LED_PORT |= _BV(RJ45_LED1);
+
+				/*if(bit_is_set(INREG_AIRS,PIN_AIRPLUS_AUX)){
+				 gFlag |= _BV(FLAG_AIRPLUS_AUX);
+				 char plus[]="plus closed";
+				 LOG_println(plus, strlen(plus));
+				} else {
+				 gFlag &= ~_BV(FLAG_AIRPLUS_AUX);
+				 char op[]="plus open";
+				 LOG_println(op, strlen(op));
+			 }*/
+
+				if(bit_is_set(gFlag, FLAG_AIRPLUS_AUX) && ~chargingStartupComplete){
+					_delay_ms(2000);
+					RJ45_LED_PORT |= _BV(RJ45_LED2);
+					PRECHARGE_PORT |= _BV(PRECHARGE_CTRL);
+					_delay_ms(6000);
+					AIRMINUS_PORT |= _BV(AIRMINUS_CTRL);
+					PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
+					chargingStartupComplete = 1;
+					RJ45_LED_PORT &= ~_BV(RJ45_LED2);
+				}
+
+			}
+		}
 
     while(1) {
 			if(bit_is_set(gFlag, UPDATE_STATUS)){
@@ -441,7 +498,7 @@ int main (void) {
 							}
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS) || bit_is_clear(gFlag, FLAG_COOLING_STATUS)){ // if tsms node no longer has shutdown voltage
+						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS) || bit_is_clear(gFlag, FLAG_COOLING_PRESSURE)){ // if tsms node no longer has shutdown voltage
 							AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 							tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
