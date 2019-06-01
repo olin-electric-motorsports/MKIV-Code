@@ -113,6 +113,8 @@ uint8_t tractiveSystemStatus = 0;
 volatile uint8_t timer1OverflowCount = 0;
 
 char uart_buf[64];
+uint8_t msgBL[5];
+uint8_t msgMC[2];
 
 uint8_t msgCritical[4] = {0,0,0,0};
 #define MSG_INDEX_PRECHARGE_STATUS	0
@@ -216,7 +218,6 @@ ISR(PCINT2_vect) { // PCINT16-23 -> SS_MP
 ISR(CAN_INT_vect) {
 		CANPAGE = (MOB_MOTORCONTROLLER << MOBNB0);
 	  if (bit_is_set(CANSTMOB,RXOK)) {
-	      uint8_t msgMC[2];
 	      msgMC[0] = CANMSG;
 	      msgMC[1] = CANMSG;
 
@@ -230,7 +231,6 @@ ISR(CAN_INT_vect) {
 	  }
 		CANPAGE = (MOB_BRAKELIGHT << MOBNB0);
 	  if (bit_is_set(CANSTMOB,RXOK)) {
-	      uint8_t msgBL[5];
 	      msgBL[0] = CANMSG; msgBL[1] = CANMSG; msgBL[2] = CANMSG; msgBL[3] = CANMSG; // increment CANMSG to get to TSMS info
 				msgBL[4] = CANMSG; // TSMS sense
 
