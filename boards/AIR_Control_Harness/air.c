@@ -23,15 +23,16 @@
 #define RJ45_LED2				PB1
 #define RJ45_LED_PORT	PORTB
 
-#define PRECHARGE_CTRL			PB4
+#define PRECHARGE_CTRL			PB0
 #define PRECHARGE_PORT		PORTB
-#define AIRMINUS_CTRL				PB5
+#define AIRMINUS_CTRL				PB1
 #define AIRMINUS_PORT			PORTB
 
 /*----- Inputs -----*/
-#define PIN_AIRPLUS_AUX			PC6 // PCINT14
-#define PIN_AIRMINUS_AUX		PC7 // PCINT15
-#define INREG_AIRS				 PINC // INREG -> input register
+#define PIN_AIRPLUS_AUX				 PC6 // PCINT14
+#define INREG_AIRPLUS_AUX			PINC
+#define PIN_AIRMINUS_AUX			 PC7 // PCINT15
+#define INREG_AIRMINUS_AUX		PINC // INREG -> input register
 
 #define PIN_BMS_STATUS			PB2 // PCINT2
 #define INREG_BMS_STATUS	 PINB
@@ -161,8 +162,12 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD, COOLING_PRESSU
 
 		if(bit_is_clear(INREG_SS_HVD,PIN_SS_HVD)){
 		 sFlag |= _BV(FLAG_SS_HVD);
+		 char hvd_good[]="hvd_good";
+		 LOG_println(hvd_good, strlen(hvd_good));
 		} else {
 		 sFlag &= ~_BV(FLAG_SS_HVD);
+		 char hvd_bad[]="hvd_bad";
+		 LOG_println(hvd_bad, strlen(hvd_bad));
 		}
 
 		if(bit_is_clear(INREG_COOLING_PRESSURE,PIN_COOLING_PRESSURE)){
@@ -173,7 +178,7 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD, COOLING_PRESSU
 }
 
 ISR(PCINT1_vect) { // PCINT8-15 -> AIRPLUS_AUX, AIRMINUS_AUX, SS_IMD, SS_BMS
-		if(bit_is_set(INREG_AIRS,PIN_AIRPLUS_AUX)){
+		if(bit_is_set(INREG_AIRPLUS_AUX,PIN_AIRPLUS_AUX)){
 		 gFlag |= _BV(FLAG_AIRPLUS_AUX);
 		 //char plus[]="plus";
 		 //LOG_println(plus, strlen(plus));
@@ -181,7 +186,7 @@ ISR(PCINT1_vect) { // PCINT8-15 -> AIRPLUS_AUX, AIRMINUS_AUX, SS_IMD, SS_BMS
 		 gFlag &= ~_BV(FLAG_AIRPLUS_AUX);
 		}
 
-		if(bit_is_set(INREG_AIRS,PIN_AIRMINUS_AUX)){
+		if(bit_is_set(INREG_AIRMINUS_AUX,PIN_AIRMINUS_AUX)){
 		 gFlag |= _BV(FLAG_AIRMINUS_AUX);
 		} else {
 		 gFlag &= ~_BV(FLAG_AIRMINUS_AUX);
@@ -231,8 +236,10 @@ ISR(CAN_INT_vect) {
 
 	      if(msgBL[4]==0xff){
 					gFlag |= _BV(FLAG_TSMS_STATUS);
+					//RJ45_LED_PORT |= _BV(RJ45_LED2);
 				} else {
 					gFlag &= ~_BV(FLAG_TSMS_STATUS);
+					//RJ45_LED_PORT &= ~_BV(RJ45_LED2);
 				}
 
 	      CANSTMOB = 0x00;
@@ -247,7 +254,7 @@ void initTimer0(void) {
     TCCR0A = _BV(WGM01);    // Set up 8-bit timer in CTC mode
     TCCR0B = 0x05;          // clkio/1024 prescaler
     TIMSK0 |= _BV(OCIE0A);  // Every 1024 cycles, OCR0A increments
-    OCR0A = 0x27; //dec 39  // until 0xff, 255, which then calls for
+    OCR0A = 0xff; //dec 39  // until 0xff, 255, which then calls for
                             // the TIMER0_COMPA_vect interrupt
 			    // currently running at 100Hz
 }
@@ -424,7 +431,7 @@ int main (void) {
 				gFlag &= ~_BV(UPDATE_STATUS); // TODO IMD STATUS PIN TURNS OFF SLOW DEBUG
 				RJ45_LED_PORT |= _BV(RJ45_LED1);
 
-				/*if(bit_is_set(INREG_AIRS,PIN_AIRPLUS_AUX)){
+				/*if(bit_is_set(INREG_AIRPLUS_AUX,PIN_AIRPLUS_AUX)){
 				 gFlag |= _BV(FLAG_AIRPLUS_AUX);
 				 char plus[]="plus closed";
 				 LOG_println(plus, strlen(plus));
@@ -453,66 +460,113 @@ int main (void) {
 
 				gFlag &= ~_BV(UPDATE_STATUS); // TODO IMD STATUS PIN TURNS OFF SLOW DEBUG
 
-				checkBMSPowerStagePlausibility();
-				checkIMDPowerStagePlausibility(); // delay this for IMD startup time
-				checkAIRPLUS(); // TODO think about charging, currently compares AIR plus to TSMS can message, won't work in charging
-				checkAIRMINUS();
+				//checkBMSPowerStagePlausibility();
+				//checkIMDPowerStagePlausibility(); // delay this for IMD startup time
+				//checkAIRPLUS(); // TODO think about charging, currently compares AIR plus to TSMS can message, won't work in charging
+				//checkAIRMINUS();
 				sendShutdownSenseCANMessage();
 				sendCriticalCANMessage();
 
 				if(tractiveSystemStatus==TS_STATUS_DEENERGIZED){
+						char deenergized[]="deenergized";
+						LOG_println(deenergized, strlen(deenergized));
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay, sanity check
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus, sanity check
 						if(bit_is_set(gFlag, FLAG_TSMS_STATUS)){ // if tsms closed
+							char tsms_closed[]="tsms_closed";
+							LOG_println(tsms_closed, strlen(tsms_closed));
 							tractiveSystemStatus = TS_STATUS_PRECHARGE_DELAY; // set status to precharge delay
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGE_DELAY) {
+					char precharge_delay[]="precharge_delay";
+					LOG_println(precharge_delay, strlen(precharge_delay));
 						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
 							tractiveSystemStatus = TS_STATUS_DEENERGIZED;
+							char tsms_open[]="tsms_open";
+							LOG_println(tsms_open, strlen(tsms_open));
 						} else if(motorControllerVoltage > 0){ // if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
 							panic(FAULT_CODE_PRECHARGE_STUCK);
+							char precharge_stuck[]="precharge_stuck";
+							LOG_println(precharge_stuck, strlen(precharge_stuck));
 						} else if(timer1OverflowCount>OVF_COUNT_PRECHARGE_DELAY){ // if precharge delay time elapsed
+							char precharge_delay_over[]="precharge_delay_over";
+							LOG_println(precharge_delay_over, strlen(precharge_delay_over));
 							tractiveSystemStatus = TS_STATUS_PRECHARGING; // set status to precharging
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x0f; // update critical can message to precharge started
 							PRECHARGE_PORT |= _BV(PRECHARGE_CTRL); // close precharge relay
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGING) {
+					char precharging[]="precharging";
+					LOG_println(precharging, strlen(precharging));
+
 					if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
+						char tsms_open[]="tsms_open";
+						LOG_println(tsms_open, strlen(tsms_open));
 						tractiveSystemStatus = TS_STATUS_DISCHARGING;
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
-					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){ // if precharging time elapsed
-							if(motorControllerVoltage == 0){ // if voltage is 0
+					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){
+						char precharge_over[]="precharge_over";
+						LOG_println(precharge_over, strlen(precharge_over));// if precharging time elapsed
+							if(0){ //TODO get rid of this
+							//if(motorControllerVoltage == 0){ // if voltage is 0
+								char precharge_control_loss[]="control_loss";
+								LOG_println(precharge_control_loss, strlen(precharge_control_loss));
 								panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS); // panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS)
-							} else if(motorControllerVoltage>MINIMUM_VOLTAGE_AFTER_PRECHARGE){ // if voltage is high enough
+							} else if(1){
+							//} else if(motorControllerVoltage>MINIMUM_VOLTAGE_AFTER_PRECHARGE){ // if voltage is high enough
+								char precharge_good[]="precharge_good";
+								LOG_println(precharge_good, strlen(precharge_good));
 								AIRMINUS_PORT |= _BV(AIRMINUS_CTRL); // close air minus
-								checkAIRMINUS(); // confirm closure
+								_delay_ms(100); // let air minus close before we do stuff
+								//checkAIRMINUS(); // confirm closure
 								PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
 								if (tractiveSystemStatus != TS_STATUS_PANIC){ // if we passed AIR minus check
+									char no_panic[]="no_panic";
+									LOG_println(no_panic, strlen(no_panic));
 									tractiveSystemStatus = TS_STATUS_ENERGIZED; // set status to energized
 									msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0xff; // update critical can message to precharge complete
+								} else {
+									char sudden_panic[]="sudden_panic";
+									LOG_println(sudden_panic, strlen(sudden_panic));
 								}
 							} else {
+								char precharge_incomplete[]="precharge_incomplete";
+								LOG_println(precharge_incomplete, strlen(precharge_incomplete));
 								panic(FAULT_CODE_PRECHARGE_INCOMPLETE);
 							}
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS) || bit_is_clear(gFlag, FLAG_COOLING_PRESSURE)){ // if tsms node no longer has shutdown voltage
+						char energized[]="energized";
+						LOG_println(energized, strlen(energized));
+						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){ //|| bit_is_clear(gFlag, FLAG_COOLING_PRESSURE)){ // if tsms node no longer has shutdown voltage
+							char tsms_open[]="tsms_open";
+							LOG_println(tsms_open, strlen(tsms_open));
 							AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 							tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_DISCHARGING) {
+						char discharging[]="discharging";
+						LOG_println(discharging, strlen(discharging));
 						if(timer1OverflowCount>OVF_COUNT_DISCHARGING){ // if discharging time elapsed
+							char discharge_over[]="discharge_over";
+							LOG_println(discharge_over, strlen(discharge_over));
 							if(motorControllerVoltage == 0){ // if voltage is 0
 								tractiveSystemStatus = TS_STATUS_DEENERGIZED; // set status to deenergized
+								char discharge_good[]="discharge_good";
+								LOG_println(discharge_good, strlen(discharge_good));
 							} else { // else
 								panic(FAULT_CODE_DISCHARGE_CONTROL_LOSS); // panic(FAULT_CODE_DISCHARGE_CONTROL_LOSS)
+								char discharge_control_loss[]="discharge_control_loss";
+								LOG_println(discharge_control_loss, strlen(discharge_control_loss));
 							}
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PANIC) {
+						char discharge_panic[]="panic";
+						LOG_println(discharge_panic, strlen(discharge_panic));
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus and precharge
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
 						panic(FAULT_CODE_GENERAL); // see that panic keeps being sent...
