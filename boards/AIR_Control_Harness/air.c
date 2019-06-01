@@ -23,9 +23,9 @@
 #define RJ45_LED2				PB1
 #define RJ45_LED_PORT	PORTB
 
-#define PRECHARGE_CTRL			PB0
+#define PRECHARGE_CTRL			PB4
 #define PRECHARGE_PORT		PORTB
-#define AIRMINUS_CTRL				PB1
+#define AIRMINUS_CTRL				PB5
 #define AIRMINUS_PORT			PORTB
 
 /*----- Inputs -----*/
