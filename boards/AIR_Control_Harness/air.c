@@ -180,8 +180,8 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD, COOLING_PRESSU
 ISR(PCINT1_vect) { // PCINT8-15 -> AIRPLUS_AUX, AIRMINUS_AUX, SS_IMD, SS_BMS
 		if(bit_is_set(INREG_AIRPLUS_AUX,PIN_AIRPLUS_AUX)){
 		 gFlag |= _BV(FLAG_AIRPLUS_AUX);
-		 //char plus[]="plus";
-		 //LOG_println(plus, strlen(plus));
+		 char plus[]="plus";
+		 LOG_println(plus, strlen(plus));
 		} else {
 		 gFlag &= ~_BV(FLAG_AIRPLUS_AUX);
 		}
@@ -468,23 +468,23 @@ int main (void) {
 				sendCriticalCANMessage();
 
 				if(tractiveSystemStatus==TS_STATUS_DEENERGIZED){
-						char deenergized[]="deenergized";
-						LOG_println(deenergized, strlen(deenergized));
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay, sanity check
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus, sanity check
 						if(bit_is_set(gFlag, FLAG_TSMS_STATUS)){ // if tsms closed
 							char tsms_closed[]="tsms_closed";
 							LOG_println(tsms_closed, strlen(tsms_closed));
+							char precharge_delay[]="precharge_delay";
+							LOG_println(precharge_delay, strlen(precharge_delay));
 							tractiveSystemStatus = TS_STATUS_PRECHARGE_DELAY; // set status to precharge delay
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGE_DELAY) {
-					char precharge_delay[]="precharge_delay";
-					LOG_println(precharge_delay, strlen(precharge_delay));
 						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
 							tractiveSystemStatus = TS_STATUS_DEENERGIZED;
 							char tsms_open[]="tsms_open";
 							LOG_println(tsms_open, strlen(tsms_open));
+							char deenergized[]="deenergized";
+							LOG_println(deenergized, strlen(deenergized));
 						} else if(motorControllerVoltage > 0){ // if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
 							panic(FAULT_CODE_PRECHARGE_STUCK);
 							char precharge_stuck[]="precharge_stuck";
@@ -496,14 +496,15 @@ int main (void) {
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x0f; // update critical can message to precharge started
 							PRECHARGE_PORT |= _BV(PRECHARGE_CTRL); // close precharge relay
 							resetTimer1(); // reset timer 1
+							char precharging[]="precharging";
+							LOG_println(precharging, strlen(precharging));
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGING) {
-					char precharging[]="precharging";
-					LOG_println(precharging, strlen(precharging));
-
 					if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
 						char tsms_open[]="tsms_open";
 						LOG_println(tsms_open, strlen(tsms_open));
+						char discharging[]="discharging";
+						LOG_println(discharging, strlen(discharging));
 						tractiveSystemStatus = TS_STATUS_DISCHARGING;
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
 					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){
@@ -527,6 +528,8 @@ int main (void) {
 									LOG_println(no_panic, strlen(no_panic));
 									tractiveSystemStatus = TS_STATUS_ENERGIZED; // set status to energized
 									msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0xff; // update critical can message to precharge complete
+									char energized[]="energized";
+									LOG_println(energized, strlen(energized));
 								} else {
 									char sudden_panic[]="sudden_panic";
 									LOG_println(sudden_panic, strlen(sudden_panic));
@@ -538,19 +541,17 @@ int main (void) {
 							}
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-						char energized[]="energized";
-						LOG_println(energized, strlen(energized));
 						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){ //|| bit_is_clear(gFlag, FLAG_COOLING_PRESSURE)){ // if tsms node no longer has shutdown voltage
 							char tsms_open[]="tsms_open";
 							LOG_println(tsms_open, strlen(tsms_open));
+							char discharging[]="discharging";
+							LOG_println(discharging, strlen(discharging));
 							AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 							tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_DISCHARGING) {
-						char discharging[]="discharging";
-						LOG_println(discharging, strlen(discharging));
 						if(timer1OverflowCount>OVF_COUNT_DISCHARGING){ // if discharging time elapsed
 							char discharge_over[]="discharge_over";
 							LOG_println(discharge_over, strlen(discharge_over));
@@ -558,6 +559,8 @@ int main (void) {
 								tractiveSystemStatus = TS_STATUS_DEENERGIZED; // set status to deenergized
 								char discharge_good[]="discharge_good";
 								LOG_println(discharge_good, strlen(discharge_good));
+								char deenergized[]="deenergized";
+								LOG_println(deenergized, strlen(deenergized));
 							} else { // else
 								panic(FAULT_CODE_DISCHARGE_CONTROL_LOSS); // panic(FAULT_CODE_DISCHARGE_CONTROL_LOSS)
 								char discharge_control_loss[]="discharge_control_loss";
