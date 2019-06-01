@@ -323,8 +323,8 @@ void initIO(void) {
     TCCR1B &= ~_BV(WGM13);
 
 
-    OCR1A = (uint8_t) 115;       // Duty Cycle
-    OCR1B = (uint8_t) 127;      // Duty Cycle
+    // OCR1A = (uint8_t) 115;       // Duty Cycle
+    // OCR1B = (uint8_t) 127;      // Duty Cycle
 
 }
 
