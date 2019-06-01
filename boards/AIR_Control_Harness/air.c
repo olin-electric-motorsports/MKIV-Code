@@ -108,7 +108,7 @@
 volatile uint8_t gFlag = 0x00; // Global Flag
 volatile uint8_t sFlag = 0x00; // Shutdown Sense Flag
 volatile uint8_t LEDtimer = 0x00;
-volatile uint16_t motorControllerVoltage = 0x0000;
+volatile uint16_t motorControllerVoltage = 0xffff;
 uint8_t tractiveSystemStatus = 0;
 volatile uint8_t timer1OverflowCount = 0;
 
@@ -511,13 +511,13 @@ int main (void) {
 					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){
 						char precharge_over[]="precharge_over";
 						LOG_println(precharge_over, strlen(precharge_over));// if precharging time elapsed
-							if(0){ //TODO get rid of this
-							//if(motorControllerVoltage == 0){ // if voltage is 0
+							//if(0){ //TODO get rid of this
+							if(motorControllerVoltage == 0){ // if voltage is 0
 								char precharge_control_loss[]="control_loss";
 								LOG_println(precharge_control_loss, strlen(precharge_control_loss));
 								panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS); // panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS)
-							} else if(1){
-							//} else if(motorControllerVoltage>MINIMUM_VOLTAGE_AFTER_PRECHARGE){ // if voltage is high enough
+							//} else if(1){
+							} else if(motorControllerVoltage>MINIMUM_VOLTAGE_AFTER_PRECHARGE){ // if voltage is high enough
 								char precharge_good[]="precharge_good";
 								LOG_println(precharge_good, strlen(precharge_good));
 								AIRMINUS_PORT |= _BV(AIRMINUS_CTRL); // close air minus
