@@ -116,6 +116,7 @@ uint8_t gThrottleArrayIndex = 0;
 uint8_t gThrottleArray[ROLLING_AVG_SIZE];
 uint16_t gRollingSum = 0;
 uint8_t gThrottleOut = 0;
+volatile uint8_t msg; 
 
 // Throttle mapping values
 //Values set last on May 31 by Alex Wenstrup
@@ -175,7 +176,9 @@ ISR(CAN_INT_vect) {
 
         if(gBrakeLightCan[2] == 0xFF){
             gFlag |= _BV(FLAG_BRAKE);
-        } else {
+        }
+
+        else if ((gThrottle1Out == 0x00 || gThrottle2Out == 0x00) && gBrakeLightCan[2] == 0x00) {
             gFlag &= ~_BV(FLAG_BRAKE);
         }
 
@@ -639,7 +642,7 @@ void showError(void) {
 //******************Send CAN Messages************
 void sendCanMessages(int viewCan){
     //FOR TESTING ONLY
-    //gFlag |= _BV(FLAG_MOTOR_ON);
+    gFlag |= _BV(FLAG_MOTOR_ON);
 
     gCANMessage[0] = bit_is_set(gFlag, FLAG_MOTOR_ON) ? gThrottleOut : 0;
     gCANMessage[1] = bit_is_set(gFlag,FLAG_BOTS) ? 0xFF : 0x00;
