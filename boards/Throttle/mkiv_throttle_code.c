@@ -118,7 +118,7 @@ uint16_t gRollingSum = 0;
 uint8_t gThrottleOut = 0;
 
 // Throttle mapping values
-//Values set last on May 12 by Alex Wenstrup
+//Values set last on May 31 by Alex Wenstrup
 const uint16_t throttle1_HIGH = 634;
 const uint16_t throttle1_LOW = 185;
 const uint16_t throttle2_HIGH = 994;
@@ -154,8 +154,6 @@ ISR(TIMER0_COMPA_vect) {
 }
 
 ISR(CAN_INT_vect) {
-    PLED2_PORT ^= _BV(PLED2);
-    PLED1_PORT |= _BV(PLED1);
     /*
     CAN Interupt
     Listens for CAN messages from the brakes,
@@ -213,6 +211,7 @@ ISR(CAN_INT_vect) {
 
         if(msg == 0xFF){
             gFlag |= _BV(FLAG_PANIC);
+            PLED1_PORT |= _BV(PLED1);
         } else {
             gFlag &= ~_BV(FLAG_PANIC);
         }
@@ -384,13 +383,13 @@ void checkPlausibility(void) {
     //LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
-  else if ((gThrottle1Voltage > (throttle1_HIGH + ADC_ERROR)) || gThrottle1Voltage < throttle1_LOW - (ADC_ERROR*2) {
+  else if ((gThrottle1Voltage > (throttle1_HIGH + ADC_ERROR)) || gThrottle1Voltage < throttle1_LOW - (ADC_ERROR*2)) {
     //char uart_buf[32];
     //sprintf(uart_buf, "t1 out of range error");
     //LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
-  else if ((gThrottle2Voltage > (throttle2_HIGH + ADC_ERROR)) || gThrottle2Voltage < throttle2_LOW - (ADC_ERROR*2) {
+  else if ((gThrottle2Voltage > (throttle2_HIGH + ADC_ERROR)) || gThrottle2Voltage < throttle2_LOW - (ADC_ERROR*2)) {
     //char uart_buf[32];
     //sprintf(uart_buf, "t2 out of range error");
     //LOG_println(uart_buf, strlen(uart_buf));
