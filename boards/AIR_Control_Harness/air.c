@@ -90,7 +90,6 @@
 
 /*----- MOBs -----*/
 #define MOB_BROADCAST_CRITICAL	0 // Broadcasts precharge sequence complete
-#define MOB_MOTORCONTROLLER 		1 // Receives messages from motor controller
 #define MOB_BROADCAST_PANIC 		2 // Panic MOB for BMS to open shutdown circuit
 #define MOB_BROADCAST_SS				3
 #define	MOB_BRAKELIGHT					4
@@ -102,13 +101,9 @@
 #define OVF_COUNT_PRECHARGING 			0x10 // roughly 2 seconds -> 3 time constants (1/(2*pi*1k*440uF))*3 = 1.08ish
 #define OVF_COUNT_DISCHARGING 			0x1F // roughly 4 seconds -> 3 times as long as precharge (3k res vs 1k res) -> 3.24ish
 
-/*----- Other Macros -----*/
-#define MINIMUM_VOLTAGE_AFTER_PRECHARGE		0x708 // 1800 -> voltage message is 10x, 180V, 90% of minimum pack voltage (200V)
-
 volatile uint8_t gFlag = 0x00; // Global Flag
 volatile uint8_t sFlag = 0x00; // Shutdown Sense Flag
 volatile uint8_t LEDtimer = 0x00;
-volatile uint16_t motorControllerVoltage = 0x0000;
 uint8_t tractiveSystemStatus = 0;
 volatile uint8_t timer1OverflowCount = 0;
 
@@ -216,19 +211,6 @@ ISR(PCINT2_vect) { // PCINT16-23 -> SS_MP
 }
 
 ISR(CAN_INT_vect) {
-		CANPAGE = (MOB_MOTORCONTROLLER << MOBNB0);
-	  if (bit_is_set(CANSTMOB,RXOK)) {
-	      msgMC[0] = CANMSG;
-	      msgMC[1] = CANMSG;
-
-	      motorControllerVoltage = msgMC[0] | (msgMC[1]<<8);
-
-	      CANSTMOB = 0x00;
-	      CAN_wait_on_receive(MOB_MOTORCONTROLLER,
-	                          CAN_ID_MC_VOLTAGE,
-	                          CAN_LEN_MC_VOLTAGE,
-	                          CAN_MSK_SINGLE);
-	  }
 		CANPAGE = (MOB_BRAKELIGHT << MOBNB0);
 	  if (bit_is_set(CANSTMOB,RXOK)) {
 	      msgBL[0] = CANMSG; msgBL[1] = CANMSG; msgBL[2] = CANMSG; msgBL[3] = CANMSG; // increment CANMSG to get to TSMS info
@@ -406,7 +388,6 @@ int main (void) {
     CAN_init(CAN_ENABLED);
 		ADC_init();
 		LOG_init();
-    CAN_wait_on_receive(MOB_MOTORCONTROLLER, CAN_ID_MC_VOLTAGE, CAN_LEN_MC_VOLTAGE, CAN_MSK_SINGLE);
 		CAN_wait_on_receive(MOB_BRAKELIGHT, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
 
     // Enable interrupt
@@ -485,10 +466,6 @@ int main (void) {
 							LOG_println(tsms_open, strlen(tsms_open));
 							char deenergized[]="deenergized";
 							LOG_println(deenergized, strlen(deenergized));
-						} else if(motorControllerVoltage > 0){ // if voltage is increasing, panic(FAULT_CODE_PRECHARGE_STUCK)
-							panic(FAULT_CODE_PRECHARGE_STUCK);
-							char precharge_stuck[]="precharge_stuck";
-							LOG_println(precharge_stuck, strlen(precharge_stuck));
 						} else if(timer1OverflowCount>OVF_COUNT_PRECHARGE_DELAY){ // if precharge delay time elapsed
 							char precharge_delay_over[]="precharge_delay_over";
 							LOG_println(precharge_delay_over, strlen(precharge_delay_over));
@@ -508,39 +485,19 @@ int main (void) {
 						tractiveSystemStatus = TS_STATUS_DISCHARGING;
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
 						msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
+						resetTimer1();
 					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){
 						char precharge_over[]="precharge_over";
 						LOG_println(precharge_over, strlen(precharge_over));// if precharging time elapsed
-							if(0){ //TODO get rid of this
-							//if(motorControllerVoltage == 0){ // if voltage is 0
-								char precharge_control_loss[]="control_loss";
-								LOG_println(precharge_control_loss, strlen(precharge_control_loss));
-								panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS); // panic(FAULT_CODE_PRECHARGE_CONTROL_LOSS)
-							} else if(1){
-							//} else if(motorControllerVoltage>MINIMUM_VOLTAGE_AFTER_PRECHARGE){ // if voltage is high enough
-								char precharge_good[]="precharge_good";
-								LOG_println(precharge_good, strlen(precharge_good));
-								AIRMINUS_PORT |= _BV(AIRMINUS_CTRL); // close air minus
-								_delay_ms(100); // let air minus close before we do stuff
-								//checkAIRMINUS(); // confirm closure
-								PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
-								if (tractiveSystemStatus != TS_STATUS_PANIC){ // if we passed AIR minus check
-									char no_panic[]="no_panic";
-									LOG_println(no_panic, strlen(no_panic));
-									tractiveSystemStatus = TS_STATUS_ENERGIZED; // set status to energized
-									msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0xff; // update critical can message to precharge complete
-									char energized[]="energized";
-									LOG_println(energized, strlen(energized));
-								} else {
-									char sudden_panic[]="sudden_panic";
-									LOG_println(sudden_panic, strlen(sudden_panic));
-								}
-							} else {
-								char precharge_incomplete[]="precharge_incomplete";
-								LOG_println(precharge_incomplete, strlen(precharge_incomplete));
-								panic(FAULT_CODE_PRECHARGE_INCOMPLETE);
-							}
-						}
+						AIRMINUS_PORT |= _BV(AIRMINUS_CTRL); // close air minus
+						_delay_ms(100); // let air minus close before we do stuff
+						//checkAIRMINUS(); // confirm closure
+						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
+						tractiveSystemStatus = TS_STATUS_ENERGIZED; // set status to energized
+						msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0xff; // update critical can message to precharge complete
+						char energized[]="energized";
+						LOG_println(energized, strlen(energized));
+					}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
 						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){ //|| bit_is_clear(gFlag, FLAG_COOLING_PRESSURE)){ // if tsms node no longer has shutdown voltage
 							char tsms_open[]="tsms_open";
@@ -556,17 +513,9 @@ int main (void) {
 						if(timer1OverflowCount>OVF_COUNT_DISCHARGING){ // if discharging time elapsed
 							char discharge_over[]="discharge_over";
 							LOG_println(discharge_over, strlen(discharge_over));
-							if(motorControllerVoltage == 0){ // if voltage is 0
-								tractiveSystemStatus = TS_STATUS_DEENERGIZED; // set status to deenergized
-								char discharge_good[]="discharge_good";
-								LOG_println(discharge_good, strlen(discharge_good));
-								char deenergized[]="deenergized";
-								LOG_println(deenergized, strlen(deenergized));
-							} else { // else
-								panic(FAULT_CODE_DISCHARGE_CONTROL_LOSS); // panic(FAULT_CODE_DISCHARGE_CONTROL_LOSS)
-								char discharge_control_loss[]="discharge_control_loss";
-								LOG_println(discharge_control_loss, strlen(discharge_control_loss));
-							}
+							tractiveSystemStatus = TS_STATUS_DEENERGIZED; // set status to deenergized
+							char deenergized[]="deenergized";
+							LOG_println(deenergized, strlen(deenergized));
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PANIC) {
 						char discharge_panic[]="panic";
