@@ -507,6 +507,7 @@ int main (void) {
 						LOG_println(discharging, strlen(discharging));
 						tractiveSystemStatus = TS_STATUS_DISCHARGING;
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
+						msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){
 						char precharge_over[]="precharge_over";
 						LOG_println(precharge_over, strlen(precharge_over));// if precharging time elapsed
