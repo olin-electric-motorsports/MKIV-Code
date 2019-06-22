@@ -116,7 +116,7 @@ uint8_t gThrottleArrayIndex = 0;
 uint8_t gThrottleArray[ROLLING_AVG_SIZE];
 uint16_t gRollingSum = 0;
 uint8_t gThrottleOut = 0;
-volatile uint8_t msg; 
+volatile uint8_t msg;
 
 // Throttle mapping values
 //Values set last on May 31 by Alex Wenstrup
@@ -300,7 +300,7 @@ void initMC(void) {
 }
 
 void setPledOut(void) {
-    //Sets the PLEDs as output
+    //Sets the programming LEDs as output
     DDRC |= _BV(PLED1);
     DDRB |= _BV(PLED2);
     DDRB |= _BV(PLED3);
@@ -309,13 +309,14 @@ void setPledOut(void) {
     DDRB |= _BV(LED2);
 }
 
-//READ THIS OVER BEFORE RUNNING
 void enablePCINT(void) {
-  PCICR |= _BV(PCIE0);
-  PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
+    //Enables interupts on shutdown sense pins
+    PCICR |= _BV(PCIE0);
+    PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
 }
 
 void initDriveMode(void) {
+    //Sets the drive mode (only call once, when RTD)
     ADMUX = _BV(REFS0);
     ADMUX |= DRIVE_MODE_ADC;
     ADCSRA |= _BV(ADSC);
@@ -642,7 +643,7 @@ void showError(void) {
 //******************Send CAN Messages************
 void sendCanMessages(int viewCan){
     //FOR TESTING ONLY
-    gFlag |= _BV(FLAG_MOTOR_ON);
+    //gFlag |= _BV(FLAG_MOTOR_ON);
 
     gCANMessage[0] = bit_is_set(gFlag, FLAG_MOTOR_ON) ? gThrottleOut : 0;
     gCANMessage[1] = bit_is_set(gFlag,FLAG_BOTS) ? 0xFF : 0x00;
