@@ -25,6 +25,10 @@
 #define RELAY_PORT  PORTC
 #define RELAY_DDR   DDRC
 
+#define EXT_LED1_PIN    PB3
+#define EXT_LED2_PIN    PB4
+#define EXT_LED_PORT    PORTB
+
 // gFlag register pre-defines
 #define TRANSMIT_STATUS     0b00000001
 #define UNDER_VOLTAGE       0b00000010
@@ -71,6 +75,9 @@ ISR(TIMER0_COMPA_vect) {
 
         gFlag |= TRANSMIT_STATUS;
         LED_PORT ^= _BV(LED1_PIN);
+
+        // Set EXT LED1 high for start of cycle
+        EXT_LED_PORT |= _BV(EXT_LED1_PIN);
 
     } else {
         gCounterTransmit++;
@@ -288,7 +295,8 @@ int main (void) {
 
     /* Set the data direction register so the led pin is output */
     LED_DDR |= _BV(LED1_PIN) | _BV(LED2_PIN) | _BV(LED3_PIN);
-
+    DDRB |= _BV(EXT_LED1_PIN) | _BV(EXT_LED2_PIN);
+    
     sei();
     /* Initialize CAN */
     CAN_init(CAN_ENABLED);
@@ -310,6 +318,7 @@ int main (void) {
         RELAY_PORT |= _BV(RELAY_PIN);
         gBMSStatus = 0xFF;
         LED_PORT |= _BV(LED3_PIN);
+        EXT_LED_PORT |= _BV(EXT_LED2_PIN);
     }
 
     while (1) {
@@ -330,6 +339,7 @@ int main (void) {
             }
 
             LED_PORT ^= _BV(LED2_PIN);
+            EXT_LED_PORT &= ~_BV(EXT_LED1_PIN);
 
             // Actually build up a CAN message
             //Report relay status
@@ -358,6 +368,7 @@ int main (void) {
             RELAY_PORT &= ~_BV(RELAY_PIN);
             gBMSStatus = 0x00;
             LED_PORT &= ~_BV(LED3_PIN);
+            EXT_LED_PORT &= ~_BV(EXT_LED2_PIN);
         }
 
     }
