@@ -18,9 +18,9 @@
 #include "spi.h"
 #include "ltc6811_defs.h"
 
-#define TOTAL_IC    1
+#define TOTAL_IC    7
 #define NUM_CELLS   12 //There are 10, but we need to read all 12 back.
-#define NUM_TEMPS   10 //There are 10 of these.
+#define NUM_TEMPS   20  //There are 20 temp sensors per segment
 #define NUM_AUX_CH  6   // There are 10 AUX voltages
 
 // Cell voltages read back from the peripheral board
@@ -48,6 +48,8 @@ void SPI_write_then_read(uint8_t *tx_data, uint8_t tx_len, uint8_t* rx_data, uin
 
 //Generic wakeup command to wake the ltc6813 from sleep
 void wakeup_sleep(uint8_t total_ic);
+
+void wakeup_idle(uint8_t total_ic);
 
 void ltc6811_adcv(
         uint8_t MD, //ADC Mode
