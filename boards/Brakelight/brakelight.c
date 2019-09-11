@@ -76,15 +76,15 @@ ISR(TIMER0_COMPA_vect) {
 /* Interrupt service routine for pin change interrupts on PCINT[0:7] */
 ISR(PCINT2_vect) {
 
-    gStatusMessage[CAN_GLVMS] = (bit_is_set(PIND, SS_GLVMS) ? 0x00 : 0xFF);
+    gStatusMessage[CAN_GLVMS] = (bit_is_clear(PIND, SS_GLVMS) ? 0xFF : 0x00);
     gStatusMessage[CAN_BRAKE_GATE] = (bit_is_set(PIND, Brakelight) ? 0xFF : 0x00);
 
 }
 
 ISR(PCINT0_vect){
-    gStatusMessage[CAN_BSPD] = (bit_is_set(PINB, SS_BSPD) ? 0x00 : 0xFF);
-    gStatusMessage[CAN_TSMS] = (bit_is_set(PINB, SS_TSMS) ? 0x00 : 0xFF);
-    gStatusMessage[CAN_ESTOP] = (bit_is_set(PINB, SS_LEFT_ESTOP) ? 0x00 : 0xFF);
+    gStatusMessage[CAN_BSPD] = (bit_is_clear(PINB, SS_BSPD) ? 0xFF: 0x00);
+    gStatusMessage[CAN_TSMS] = (bit_is_clear(PINB, SS_TSMS) ? 0xFF : 0x00);
+    gStatusMessage[CAN_ESTOP] = (bit_is_clear(PINB, SS_LEFT_ESTOP) ? 0xFF : 0x00);
 }
 
 void initADC(void) {
@@ -112,14 +112,15 @@ void readBrakePressure(void){
 	ADMUX |= 10; // ADC10
 	ADCSRA |= _BV(ADSC);
 	loop_until_bit_is_clear(ADCSRA,ADSC);
-	uint16_t brakeValue = ADC; 
+	uint16_t brakeValue = ADC;
 
 	gStatusMessage[CAN_BRAKE_ANALOG_MSB] = (uint8_t) (brakeValue >> 2);
 	gStatusMessage[CAN_BRAKE_ANALOG_LSB] = (uint8_t) brakeValue;
-
+//
 }
 
 int main(void) {
+    // _delay_ms(500);
 
     //Set up LEDs
     DDRD |= _BV(LED1) | _BV(LED2);
@@ -149,7 +150,7 @@ int main(void) {
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
             PORTD ^= _BV(EXT_LED2);
             gTimerFlag &= ~_BV(UPDATE_STATUS);
-            readBrakePressure(); 
+            readBrakePressure();
             CAN_transmit(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, gStatusMessage);
         }
     }
