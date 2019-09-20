@@ -343,8 +343,13 @@ int main (void) {
             gStatusMessage[1] = 100;
             // TODO: state of charge
             gStatusMessage[2] = 12;
-            // Report BMS ok for BMS light
-            gStatusMessage[3] = 0xFF;
+            if ((gFlag & OVER_VOLTAGE) || (gFlag & UNDER_VOLTAGE) || (gFlag & OVER_TEMP) || (gFlag & UNDER_TEMP)) {
+                RELAY_PORT &= ~_BV(RELAY_PIN);
+                gStatusMessage[3] = 0xFF;
+            } else {
+                // Report BMS ok for BMS light
+                gStatusMessage[3] = 0x00;
+            }
             // Report regen status
             gStatusMessage[4] = 0;
             // Report current limiting
@@ -356,9 +361,10 @@ int main (void) {
 
         }
 
-        if ((gFlag & OVER_VOLTAGE) || (gFlag & UNDER_VOLTAGE) || (gFlag & OVER_TEMP) || (gFlag & UNDER_TEMP)) {
-            RELAY_PORT &= ~_BV(RELAY_PIN);
-        }
+        // if ((gFlag & OVER_VOLTAGE) || (gFlag & UNDER_VOLTAGE) || (gFlag & OVER_TEMP) || (gFlag & UNDER_TEMP)) {
+        //     RELAY_PORT &= ~_BV(RELAY_PIN);
+        //     gStatusMessage
+        // }
 
     }
 }
