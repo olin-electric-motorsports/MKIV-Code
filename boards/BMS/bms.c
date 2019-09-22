@@ -290,13 +290,12 @@ uint8_t read_all_temperatures(void)
     return error;
 }
 
-
 int main (void) {
 
     /* Set the data direction register so the led pin is output */
     LED_DDR |= _BV(LED1_PIN) | _BV(LED2_PIN) | _BV(LED3_PIN);
     DDRB |= _BV(EXT_LED1_PIN) | _BV(EXT_LED2_PIN);
-    
+
     sei();
     /* Initialize CAN */
     CAN_init(CAN_ENABLED);
@@ -369,6 +368,13 @@ int main (void) {
             gBMSStatus = 0x00;
             LED_PORT &= ~_BV(LED3_PIN);
             EXT_LED_PORT &= ~_BV(EXT_LED2_PIN);
+
+            if (gFlag & OVER_VOLTAGE) {char flagmsg[]= "Over Voltage"; LOG_println(flagmsg, strlen(flagmsg));}
+            if (gFlag & UNDER_VOLTAGE) {char flagmsg[] = "Under Voltage"; LOG_println(flagmsg, strlen(flagmsg));}
+            if (gFlag & OVER_TEMP) {char flagmsg[] = "Over Temp"; LOG_println(flagmsg, strlen(flagmsg));}
+            if (gFlag & UNDER_TEMP) {char flagmsg[] = "Under Temp"; LOG_println(flagmsg, strlen(flagmsg));}
+            if (missed_cycle_count >= MAX_MISSED_CYCLES) {char flagmsg[] = "Missed more than `MAX_MISSED_CYCLES`"; LOG_println(flagmsg, strlen(flagmsg));}
+
         }
 
     }
