@@ -364,7 +364,7 @@ int main (void) {
                     (gFlag & OVER_TEMP) || (gFlag & UNDER_TEMP) ||
                     (missed_cycle_count >= MAX_MISSED_CYCLES)) {
 
-            RELAY_PORT &= ~_BV(RELAY_PIN);
+            //RELAY_PORT &= ~_BV(RELAY_PIN);// Commented out to prevent Shutdown of car. 
             gBMSStatus = 0x00;
             LED_PORT &= ~_BV(LED3_PIN);
             EXT_LED_PORT &= ~_BV(EXT_LED2_PIN);
