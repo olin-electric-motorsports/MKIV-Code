@@ -262,9 +262,9 @@ void initTimer(void) {
     // Enable Match A interupts - page 90
     TIMSK0 |= _BV(OCIE0A);
 
-    //Makes the timer reset everytime it hits 64 (~64 Hz)
+    //Makes the timer reset everytime it hits 39 (~100 Hz)
     // - page 90
-    OCR0A = 64;
+    OCR0A = 39;
 }
 
 void initADC(void) {
@@ -664,14 +664,14 @@ void sendCanMessages(int viewCan){
 
     uint16_t thrott = bit_is_clear(gFlag, FLAG_THROTTLE_10) ? (uint16_t) gThrottleOut : 0;
     uint16_t mc_remap = (uint16_t)(thrott * 9);
-    gCANMotorController[0] = mc_remap;
-    gCANMotorController[1] = mc_remap >> 8;
-    gCANMotorController[2] = 0x00;
-    gCANMotorController[3] = 0x00;
-    gCANMotorController[4] = 0x01;
-    gCANMotorController[5] = bit_is_set(gFlag,FLAG_MOTOR_ON) ? 0x01 : 0x00;
-    gCANMotorController[6] = 0x00;
-    gCANMotorController[7] = 0x00;
+    gCANMotorController[0] = mc_remap;		//torque command
+    gCANMotorController[1] = mc_remap >> 8;	//torque command
+    gCANMotorController[2] = 0x00;		//speed command (unused)
+    gCANMotorController[3] = 0x00;		//speed command (unused)
+    gCANMotorController[4] = 0x01;		//direction command (0=reverse,,,1=forward)
+    gCANMotorController[5] = bit_is_set(gFlag,FLAG_MOTOR_ON) ? 0x01 : 0x00; //inverter on or off
+    gCANMotorController[6] = 0x00;		// commanded torque limit, if 0, uses EEPROM set value
+    gCANMotorController[7] = 0x00;		// commanded torque limit, ^
 
     if (bit_is_set(gFlag, FLAG_THROTTLE_10) || bit_is_set(gFlag, FLAG_BRAKE) || bit_is_clear(gFlag, FLAG_MOTOR_ON)) {
       gCANMotorController[0] = 0x00;
@@ -740,7 +740,10 @@ int main(void) {
       //testStartup();
       sendCanMessages(0);
 
-      printValues();
+      gError = 5;
+      showError();
+      //printThrottle1();
+      //printThrottle();
     }
   }
 }

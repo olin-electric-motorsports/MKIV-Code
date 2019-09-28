@@ -1,9 +1,11 @@
 /*
 Header:
-    This is the functional code for the dashboard-right board. 
+    This is the functional code for the dashboard-right board.
     Function: Responsible for IMD and BMS LED indicators - get info from those boards
             : Start Button + corresponding LED - Final Check before entering RTD
             : Interface with LED Bars Board
+
+    TODO: IMPLEMENT POWER CYCLE LOGIC
 
 Author:
     Aditya Sudhakar
@@ -25,9 +27,9 @@ Author:
 /*----- Macro Definitions -----*/
 
 // LEDs
-#define DEBUG_LED1                         PB4
-#define DEBUG_LED2                         PB5
-#define DEBUG_LED3                         PB6
+#define DEBUG_LED1                         PB5
+#define DEBUG_LED2                         PB6
+#define DEBUG_LED3                         PB7
 
 #define RJ_LED1                            PB0
 #define RJ_LED2                            PB1
@@ -47,7 +49,7 @@ Author:
 
 #define IMD_LED                            PB3
 #define PORT_IMD_LED                       PORTB
-    
+
 
 
 // Start Button Status + LED
@@ -60,6 +62,10 @@ Author:
 /* Ready to Drive */
 #define RTD_LD                             PC5
 #define RTD_PORT                           PORTC
+
+/* Steering Pot*/
+#define STEERING_POT                       PD5
+#define PORT_STEERING_POT                  PORTD
 
 
 // CAN Positions
@@ -80,18 +86,19 @@ Author:
 // gFlag positions
 #define STATUS_START                       1
 #define BRAKE_PRESSED                      2
-#define TSMS_CLOSED                        3
+#define BUZZED                             3
 #define BMS_LIGHT                          4
 #define IMD_STATUS                         5
 #define PRECHARGE                          6
-    
+#define RTD_STATUS                         7
+
 
 #define UPDATE_STATUS                      0
 
 
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
-volatile uint8_t gBuzz = 0x00;  // Global Flag for Buzzer
+uint8_t gSteering = 0x00;
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 uint8_t can_recv_msg[8] = {};
 
@@ -128,13 +135,8 @@ ISR(CAN_INT_vect) {
 
         if(can_recv_msg[2] == 0xFF) {
             gFlag |= _BV(BRAKE_PRESSED);           //trip flag
-            gBuzz |= 0b00000010;
-        } 
-
-        if(can_recv_msg[4] == 0xFF) {
-            gFlag |= _BV(TSMS_CLOSED);
         } else {
-            gFlag &= ~_BV(TSMS_CLOSED);
+            gFlag &= ~_BV(BRAKE_PRESSED);
         }
 
         //Setup to Receive Again
@@ -153,12 +155,14 @@ ISR(CAN_INT_vect) {
       can_recv_msg[5] = CANMSG;   // Current Limiting Enabled
       can_recv_msg[6] = CANMSG;   // Cell Balancing Status
 
+      OCR1B = can_recv_msg[3]; //SoC for PWM
+      
+
       // Grab BMS fault light
       if(can_recv_msg[3] == 0x00) {
-          gFlag |= _BV(BMS_LIGHT);   // If BMS shutdown is true, make BMS_PIN high
-      }
+          gFlag |= _BV(BMS_LIGHT);   // If BMS shutdown is low, turn light pin high
 
-
+      } 
       //Setup to Receive Again
       CANSTMOB = 0x00;
       CAN_wait_on_receive(BMS_CORE_MBOX, CAN_ID_BMS_CORE, CAN_LEN_BMS_CORE, CAN_MSK_SINGLE);
@@ -176,8 +180,8 @@ ISR(CAN_INT_vect) {
 
 
       // Grab IMD status
-      if(can_recv_msg[5] == 0xFF) {
-          gFlag |= _BV(IMD_STATUS);
+      if(can_recv_msg[5] == 0x00) {
+          gFlag |= _BV(IMD_STATUS); //If IMD status is low, set light pin high
       }
 
       // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
@@ -200,7 +204,11 @@ ISR(CAN_INT_vect) {
 
       if(can_recv_msg[0] == 0xFF){
           gFlag |= _BV(PRECHARGE);
-          gBuzz |= 0b00000001;
+      }
+      else {
+          gFlag &= ~_BV(PRECHARGE);
+          gFlag &= ~_BV(STATUS_START);
+          gCAN_MSG[0] = 0x00;
       }
 
 
@@ -220,8 +228,7 @@ ISR(CAN_INT_vect) {
         can_recv_msg[3] = CANMSG;   // inertia
         can_recv_msg[4] = CANMSG;   // estop
 
-        throttle = can_recv_msg[0];
-        OCR1A = can_recv_msg[0];
+        OCR1A = can_recv_msg[0]; //Throttle for PWM
 
 
         //Setup to Receive Again
@@ -235,11 +242,21 @@ ISR(CAN_INT_vect) {
 
 ISR(PCINT1_vect) {
 
-    if(bit_is_set(PINC,START_PIN)) {
+    if(bit_is_clear(PINC,START_PIN)) { //Pull up resistor. Therefore this should be bit is clear
         gFlag |= _BV(STATUS_START);
+        PORT_DEBUG_LED2 |= _BV(DEBUG_LED2);
     } else {
         gFlag &= ~_BV(STATUS_START);
+        PORT_DEBUG_LED2 &= ~_BV(DEBUG_LED2);
     }
+}
+
+ISR(PCINT2_vect){
+  if(bit_is_set(PIND,PD2)){
+    PORTC |= _BV(PC0);
+  }else{
+    PORTC &= ~_BV(PC0);
+  }
 }
 
 ISR(TIMER0_COMPA_vect) {
@@ -268,22 +285,33 @@ void initIO(void) {
 
     DDRB |= _BV(DEBUG_LED1) | _BV(DEBUG_LED2) | _BV(DEBUG_LED3) | _BV(RJ_LED1) | _BV(RJ_LED2) | _BV(IMD_LED) | _BV(START_LED);
     DDRC |= _BV(RTD_LD) | _BV(BMS_LED);
+    PORT_BMS_LED &= ~_BV(BMS_LED);
+
+    //Set start pin as input
+    DDRC &= ~_BV(START_PIN);
 
     //Set Start Pin as input pull up
-    DDRC |= ~_BV(START_PIN);
     PORTC |= _BV(START_PIN);
 
+    //Set pull up resistor for steering pot
+    PORT_STEERING_POT |= _BV(STEERING_POT);
+
+    PORTC |= _BV(PC0);
+
     /* Setup pin change interrupt registers for start pin*/
-    PCICR |= _BV(PCIE1);
+    PCICR |= _BV(PCIE1) | _BV(PCIE2);
     PCMSK1 |= _BV(PCINT14);
+    PCMSK2 |= _BV(PCINT18);
 
 
 
     /*----- Setup PWM output -----*/
     //Output compare pin is OC1B, so we need OCR1B as our counter
-    DDRD |= _BV(PD2); //Enable output pin
-    DDRD |= _BV(PD3); //Enable output pin
-    DDRC |= _BV(PC1);
+    DDRC |= _BV(PC0); //Enable output pin
+    DDRC |= _BV(PC1); //Enable output pin
+
+    // DDRD |= _BV(PD3);
+    DDRD |= _BV(PD2); //PWM is happening on this pin
 
     // pg 119 and 110 of datasheet
     // currently running on mode 5 for 8-bit resolution timer
@@ -295,49 +323,29 @@ void initIO(void) {
     TCCR1B &= ~_BV(WGM13);
 
 
-    OCR1A = (uint8_t) 30;       // Duty Cycle
-    OCR1B = (uint8_t) 255;      // Duty Cycle
+    // OCR1A = (uint8_t) 115;       // Duty Cycle
+    // OCR1B = (uint8_t) 127;      // Duty Cycle
 
 }
 
-void checkShutdownState(void)   {
-    /*
-    -Check if bits are set
-        -IF they are, set CAN list position to 0xFF
-        -ELSE do set CAN list position to 0x00
-    */
-    
-    // Check Start Button
-    if(bit_is_set(gFlag, STATUS_START)) {
-        gCAN_MSG[CAN_START_BUTTON] = 0xFF;
-        gBuzz |= 0b00000100;
-    }
-}
 
 void updateStateFromFlags(void) {
     /*
     Based off the state of the flag(s), update components and send CAN
     */
-    
+
     // Check BMS light
     if((bit_is_set(gFlag, BMS_LIGHT))) {
         PORT_BMS_LED |= _BV(BMS_LED);
+        gCAN_MSG[0] = 0x00;
+
     }
 
     // Check IMD light
     if((bit_is_set(gFlag, IMD_STATUS))) {
         PORT_IMD_LED |= _BV(IMD_LED);
+        gCAN_MSG[0] = 0x00;
     }
-
-    // Check if Buzzer is ready to Buzz
-    if(gBuzz == 0b00000111){              //Start Button Status, Brakes, Precharge
-        RTD_PORT |= _BV(RTD_LD);
-        _delay_ms(400);
-        RTD_PORT &= ~(_BV(RTD_LD));
-        PORT_START_LED |= _BV(START_LED);
-
-        gBuzz = 0b00000000;               //Ready to buzz again if necessary
-      }
 }
 
 void initADC(void) {
@@ -353,8 +361,17 @@ void initADC(void) {
     //Reads by default from ADC0 (pin 11)
     //This line is redundant. The timer
     ADMUX |= _BV(0x00);
+
 }
 
+void readPorts(void){
+
+    ADMUX |= 2;
+    ADCSRA |= _BV(ADSC);
+    uint8_t steering = (uint8_t) (ADC >> 2);
+    gSteering = steering;
+
+}
 
 /*----- MAIN -----*/
 int main(void){
@@ -366,12 +383,14 @@ int main(void){
     -Infinite loop checking shutdown state!
     */
 
+    _delay_ms(3000);
+
     // Initialize I/O
     initIO();
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
-    
+
     // CBN Enable
     CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
     CAN_wait_on_receive(BMS_CORE_MBOX, CAN_ID_BMS_CORE, CAN_LEN_BMS_CORE, CAN_MSK_SINGLE);
@@ -383,42 +402,59 @@ int main(void){
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
 
-    // RTD_PORT |= _BV(RTD_LD);
-    // _delay_ms(400); 
-    // RTD_PORT &= ~(_BV(RTD_LD));
-
     while(1) {
 
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
-            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag    
-
-            PORT_RJ_LED1 ^= _BV(RJ_LED1); //Blink Orange LED for timing check
-
-            PORT_START_LED ^= _BV(START_LED);
+            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
+            PORT_DEBUG_LED1 ^= _BV(DEBUG_LED1); //Timing Check
 
             updateStateFromFlags();
-            checkShutdownState();
+            readPorts();
+
+            gCAN_MSG[1] = gSteering;
+
+            CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+
+            //COMMENT THIS OUT!!
+            //PORT_BMS_LED |= _BV(BMS_LED);
+            //PORT_IMD_LED |= _BV(IMD_LED);
 
 
-            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
-            // if(bit_is_set(gFlag,STATUS_START)) {
+            //CHANGE TO PRECHARGE IS SET!!!!!!!!
+            if(bit_is_clear(gCAN_MSG,CAN_READY_TO_DRIVE) && bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
+
+                // RTD_PORT |= _BV(RTD_LD);
+                // _delay_ms(1500);
+                // RTD_PORT &= ~(_BV(RTD_LD));
+
                 gCAN_MSG[0] = 0xFF;
-                CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
-                PORTB |= _BV(PB6);     // Blink Middle of 3 Debug LEDs for check
-
-            } else{
-                PORTB &= ~_BV(PB6);
-                RTD_PORT |= _BV(RTD_LD);
-                _delay_ms(400);
-                RTD_PORT &= ~(_BV(RTD_LD));                
+                PORT_DEBUG_LED3 |= _BV(DEBUG_LED3);
             }
 
 
             if(bit_is_set(gFlag, BRAKE_PRESSED)) {
-                PORT_RJ_LED2 |= _BV(RJ_LED2);
+                PORT_RJ_LED1 |= _BV(RJ_LED1);
+            } else{
+                PORT_RJ_LED1 &= ~_BV(RJ_LED1);
             }
 
-        }
+            if(bit_is_set(gFlag, PRECHARGE)) {
+                PORT_RJ_LED2 |= _BV(RJ_LED2);
+            } else{
+                PORT_RJ_LED2 &= ~_BV(RJ_LED2);
+            }
 
+            if(bit_is_clear(gFlag, PRECHARGE) && bit_is_set(gFlag, BRAKE_PRESSED)) {
+                PORT_START_LED |= _BV(START_LED);
+            } else{
+                PORT_START_LED &= ~_BV(START_LED);
+            }
+
+            if(bit_is_set(gFlag, STATUS_START)) {
+                gCAN_MSG[2] = 0xFF;
+            } else{
+                gCAN_MSG[2] = 0x00;
+            }
+        }
     }
 }
