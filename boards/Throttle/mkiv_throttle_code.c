@@ -81,7 +81,7 @@
 
 #define UPDATE_STATUS 1
 
-#define ADC_ERROR 8
+#define ADC_ERROR 32
 
 //********************Global variables***************
 uint8_t gFlag = 0;
@@ -116,21 +116,26 @@ uint8_t gThrottleArrayIndex = 0;
 uint8_t gThrottleArray[ROLLING_AVG_SIZE];
 uint16_t gRollingSum = 0;
 uint8_t gThrottleOut = 0;
+volatile uint8_t msg;
 
 // Throttle mapping values
-//Values set last on May 12 by Alex Wenstrup
-const uint16_t throttle1_HIGH = 645;
-const uint16_t throttle1_LOW = 159;
-const uint16_t throttle2_HIGH = 1015;
-const uint16_t throttle2_LOW = 246;
+//Values set last on May 31 by Alex Wenstrup
+const uint16_t throttle1_HIGH = 634;
+const uint16_t throttle1_LOW = 185;
+const uint16_t throttle2_HIGH = 994;
+const uint16_t throttle2_LOW = 282;
 
 uint8_t throttle10Counter = 0;
-const uint8_t throttle10Ticks = 4; //number of measurements that corespond to an implausibility error
+const uint8_t throttle10Ticks = 6; //number of measurements that corespond to an implausibility error
 
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t gCANMotorController[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
+uint8_t gBrakeLightCan[7] = {0, 0, 0, 0, 0, 0, 0};
+
 uint8_t clock_prescale = 0;
+
+uint8_t timer_max = 0; //SET TO 0 BEFORE GOING HV
 
 //********************Functions*************************
 
@@ -143,14 +148,13 @@ ISR(TIMER0_COMPA_vect) {
     */
 
     clock_prescale++;
-    if(clock_prescale>3) {
+    if(clock_prescale>timer_max) {
         gTimerFlag |= _BV(UPDATE_STATUS);
         clock_prescale = 0;
     }
 }
 
 ISR(CAN_INT_vect) {
-    EXT_LED_PORT ^= _BV(LED1);
     /*
     CAN Interupt
     Listens for CAN messages from the brakes,
@@ -161,11 +165,20 @@ ISR(CAN_INT_vect) {
     CANPAGE = (MOB_BRAKELIGHT << MOBNB0);
     if (bit_is_set(CANSTMOB,RXOK)) {
 
-        volatile uint8_t msg = CANMSG;
+        //Gets the third value of of the message
+        gBrakeLightCan[0] = CANMSG;
+        gBrakeLightCan[1] = CANMSG;
+        gBrakeLightCan[2] = CANMSG;
+        gBrakeLightCan[3] = CANMSG;
+        gBrakeLightCan[4] = CANMSG;
+        gBrakeLightCan[5] = CANMSG;
+        gBrakeLightCan[6] = CANMSG;
 
-        if(msg == 0xFF){
+        if(gBrakeLightCan[2] == 0xFF){
             gFlag |= _BV(FLAG_BRAKE);
-        } else {
+        }
+
+        else if ((gThrottle1Out == 0x00 || gThrottle2Out == 0x00) && gBrakeLightCan[2] == 0x00) {
             gFlag &= ~_BV(FLAG_BRAKE);
         }
 
@@ -181,7 +194,7 @@ ISR(CAN_INT_vect) {
     if (bit_is_set(CANSTMOB,RXOK)) {
         volatile uint8_t msg = CANMSG;
 
-        if(msg == 0xFF){
+        if (msg == 0xFF) {
             gFlag |= _BV(FLAG_MOTOR_ON);
         } else {
             gFlag &= ~_BV(FLAG_MOTOR_ON);
@@ -201,6 +214,7 @@ ISR(CAN_INT_vect) {
 
         if(msg == 0xFF){
             gFlag |= _BV(FLAG_PANIC);
+            PLED1_PORT |= _BV(PLED1);
         } else {
             gFlag &= ~_BV(FLAG_PANIC);
         }
@@ -286,7 +300,7 @@ void initMC(void) {
 }
 
 void setPledOut(void) {
-    //Sets the PLEDs as output
+    //Sets the programming LEDs as output
     DDRC |= _BV(PLED1);
     DDRB |= _BV(PLED2);
     DDRB |= _BV(PLED3);
@@ -295,13 +309,14 @@ void setPledOut(void) {
     DDRB |= _BV(LED2);
 }
 
-//READ THIS OVER BEFORE RUNNING
 void enablePCINT(void) {
-  PCICR |= _BV(PCIE0);
-  PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
+    //Enables interupts on shutdown sense pins
+    PCICR |= _BV(PCIE0);
+    PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
 }
 
 void initDriveMode(void) {
+    //Sets the drive mode (only call once, when RTD)
     ADMUX = _BV(REFS0);
     ADMUX |= DRIVE_MODE_ADC;
     ADCSRA |= _BV(ADSC);
@@ -367,21 +382,21 @@ void checkPanic(void) {
 
 void checkPlausibility(void) {
   if (gThrottle1Voltage * 50 > gThrottle2Voltage * 35 || gThrottle1Voltage * 55 < gThrottle2Voltage * 32) {
-    char uart_buf[32];
-    sprintf(uart_buf, "10 pcnt error");
-    LOG_println(uart_buf, strlen(uart_buf));
+    //char uart_buf[32];
+    //sprintf(uart_buf, "10 pcnt error");
+    //LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
-  else if ((gThrottle1Voltage > (throttle1_HIGH + ADC_ERROR)) || gThrottle1Voltage < throttle1_LOW - ADC_ERROR) {
-    char uart_buf[32];
-    sprintf(uart_buf, "t1 out of range error");
-    LOG_println(uart_buf, strlen(uart_buf));
+  else if ((gThrottle1Voltage > (throttle1_HIGH + ADC_ERROR)) || gThrottle1Voltage < throttle1_LOW - (ADC_ERROR*2)) {
+    //char uart_buf[32];
+    //sprintf(uart_buf, "t1 out of range error");
+    //LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
-  else if ((gThrottle2Voltage > (throttle2_HIGH + ADC_ERROR)) || gThrottle2Voltage < throttle2_LOW - ADC_ERROR) {
-    char uart_buf[32];
-    sprintf(uart_buf, "t2 out of range error");
-    LOG_println(uart_buf, strlen(uart_buf));
+  else if ((gThrottle2Voltage > (throttle2_HIGH + ADC_ERROR)) || gThrottle2Voltage < throttle2_LOW - (ADC_ERROR*2)) {
+    //char uart_buf[32];
+    //sprintf(uart_buf, "t2 out of range error");
+    //LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
   else {
@@ -539,6 +554,27 @@ void printThrottle(void) {
   LOG_println(uart_buf, strlen(uart_buf));
 }
 
+void printValues(void) {
+  char uart_buf[64];
+  sprintf(uart_buf, "tout: %d", gThrottleOut);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "tout-true: %d", gCANMessage[0]);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "t10 ticks: %d", throttle10Counter);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "gflag: %d", gFlag);
+  LOG_println(uart_buf, strlen(uart_buf));
+}
+
 void testStartup(void) {
   if (bit_is_set(gFlag, FLAG_MOTOR_ON)) {
     PLED1_PORT |= _BV(PLED1);
@@ -606,11 +642,17 @@ void showError(void) {
 
 //******************Send CAN Messages************
 void sendCanMessages(int viewCan){
+    //FOR TESTING ONLY
+    //gFlag |= _BV(FLAG_MOTOR_ON);
 
-    gCANMessage[0] = gThrottleOut;
+    gCANMessage[0] = bit_is_set(gFlag, FLAG_MOTOR_ON) ? gThrottleOut : 0;
     gCANMessage[1] = bit_is_set(gFlag,FLAG_BOTS) ? 0xFF : 0x00;
     gCANMessage[2] = bit_is_set(gFlag,FLAG_IS) ? 0xFF : 0x00;
     gCANMessage[3] = bit_is_set(gFlag,FLAG_ESTOP) ? 0xFF : 0x00;
+
+    if (bit_is_set(gFlag, FLAG_THROTTLE_10) || bit_is_set(gFlag, FLAG_BRAKE)) {
+      gCANMessage[0] = 0;
+    }
 
     CAN_transmit(MOB_BROADCAST,
                  CAN_ID_THROTTLE,
@@ -630,6 +672,12 @@ void sendCanMessages(int viewCan){
     gCANMotorController[5] = bit_is_set(gFlag,FLAG_MOTOR_ON) ? 0x01 : 0x00; //inverter on or off
     gCANMotorController[6] = 0x00;		// commanded torque limit, if 0, uses EEPROM set value
     gCANMotorController[7] = 0x00;		// commanded torque limit, ^
+
+    if (bit_is_set(gFlag, FLAG_THROTTLE_10) || bit_is_set(gFlag, FLAG_BRAKE) || bit_is_clear(gFlag, FLAG_MOTOR_ON)) {
+      gCANMotorController[0] = 0x00;
+      gCANMotorController[1] = 0x00;
+      gCANMotorController[5] = 0x00;
+    }
 
     CAN_transmit(MOB_MOTORCONTROLLER,
                  CAN_ID_MC_COMMAND,
@@ -664,6 +712,24 @@ int main(void) {
   enablePCINT();
   initMC();
 
+  CAN_wait_on_receive(MOB_DASHBOARD,
+                      CAN_ID_DASHBOARD,
+                      CAN_LEN_DASHBOARD,
+                      0xFF);
+
+  CAN_wait_on_receive(MOB_BRAKELIGHT,
+                      CAN_ID_BRAKE_LIGHT,
+                      CAN_LEN_BRAKE_LIGHT,
+                      0xFF);
+
+  CAN_wait_on_receive(MOB_PANIC,
+                      CAN_ID_PANIC,
+                      CAN_LEN_PANIC,
+                      0xFF);
+
+  PLED3_PORT |= _BV(PLED3);
+
+
   while(1) {
     if(bit_is_set(gTimerFlag,UPDATE_STATUS)) {
       gTimerFlag &= ~_BV(UPDATE_STATUS);
@@ -671,7 +737,7 @@ int main(void) {
       getAverage();
       checkPanic();
       checkShutdownState();
-      testStartup();
+      //testStartup();
       sendCanMessages(0);
 
       gError = 5;
