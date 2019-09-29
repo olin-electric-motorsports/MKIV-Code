@@ -51,6 +51,8 @@ const uint16_t LOWER_REALISTIC = 20000; // 2V is the same as above
 volatile uint8_t gFlag = 0;
 uint8_t gStatusMessage[8];
 ​
+volatile uint8_t gFlagFake = 10;
+uint8_t gStatusMessage[7];
 //global BMS status indicator
 uint8_t gBMSStatus = 0;
 ​
@@ -111,8 +113,10 @@ void setup_timer_100Hz(void) {
 }
 ​
 // READ VOLTAGES /////////////////////////////////////////////////////////////////////////////////////////
-uint8_t read_all_voltages(void) // Start Cell ADC Measurement
+int8_t read_all_voltages(void) // Start Cell ADC Measurement
 {
+    // sprintf( temp_msg, "Voltage begin");
+    // LOG_println(temp_msg, strlen(temp_msg));
     int8_t error = 0;
 ​
     wakeup_sleep(TOTAL_IC);
@@ -136,8 +140,7 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 ​
         for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
             for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-​
-                //Skip cells that are 0, i.e. cell 6 and 12
+               //Skip cells that are 0, i.e. cell 6 and 12
                 if ((cell == 5) || (cell == 11)) continue;
 ​
                 uint16_t cell_value = cell_voltages[ic][cell];
@@ -150,12 +153,16 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
                 }
                 else if (cell_value > OV_THRESHOLD) {
                     gFlag |= OVER_VOLTAGE;
+                    sprintf( temp_msg, "OV ic:%u cell:%u cell Voltage%u", ic, cell, cell_value);
+                    LOG_println(temp_msg, strlen(temp_msg));
                 }
                 else if (cell_value < LOWER_REALISTIC ) {
                     gFlubCountLow++;
                 }
                 else if (cell_value < UV_THRESHOLD) {
                     gFlag |= UNDER_VOLTAGE;
+                    sprintf( temp_msg, "UV ic:%u cell:%u cell Voltage%u", ic, cell, cell_value);
+                    LOG_println(temp_msg, strlen(temp_msg));
                 }
                 else {
                     gFlubVoltage++;
@@ -163,28 +170,34 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
             }
         }
     }
-    #if(VERBOSE == 1)
-    for (int i = 0; i < TOTAL_IC; i++) {
-        sprintf(temp_msg, "v%d,%3d,%u,%u,%u,%u,"
-                         "%u,%u,%u,%u,"
-                         "%u,%u",
-                          i,
-                          error,
-                          cell_voltages[i][0],
-                          cell_voltages[i][1],
-                          cell_voltages[i][2],
-                          cell_voltages[i][3],
-                          cell_voltages[i][4],
-                          cell_voltages[i][6],
-                          cell_voltages[i][7],
-                          cell_voltages[i][8],
-                          cell_voltages[i][9],
-                          cell_voltages[i][10]);
+
 ​
-        LOG_println(temp_msg, strlen(temp_msg));
+
+            }
+        }
     }
-    #endif
-​
+
+    // for (int i = 0; i < TOTAL_IC; i++) {
+    //     sprintf(temp_msg, "v%d,%3d,%u,%u,%u,%u,"
+    //                      "%u,%u,%u,%u,"
+    //                      "%u,%u",
+    //                       i,
+    //                       error,
+    //                       cell_voltages[i][0],
+    //                       cell_voltages[i][1],
+    //                       cell_voltages[i][2],
+    //                       cell_voltages[i][3],
+    //                       cell_voltages[i][4],
+    //                       cell_voltages[i][6],
+    //                       cell_voltages[i][7],
+    //                       cell_voltages[i][8],
+    //                       cell_voltages[i][9],
+    //                       cell_voltages[i][10]);
+    //
+    //     LOG_println(temp_msg, strlen(temp_msg));
+    // }
+
+>>>>>>> Working BMS Code Car ran for several minutes and several times without error. e # is now the method for detecting errors. Added additional error checkin infrastructure
     return error;
 }
 ​
@@ -193,10 +206,13 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
  * Then it reads back the aux voltage data for all of the boards
  * Then it parses those into the temp_sensor_voltages array.
  */
-uint8_t read_all_temperatures(void)
+int8_t read_all_temperatures(void)
 {
     uint8_t error = 0;
 ​
+    // sprintf( temp_msg, "Temperature Begin");
+    // LOG_println(temp_msg, strlen(temp_msg));
+    int8_t error = 0;
     const uint8_t MUX_CHANNELS = 8;
 ​
     wakeup_sleep(TOTAL_IC);
@@ -266,50 +282,61 @@ uint8_t read_all_temperatures(void)
 ​
     mux_disable(TOTAL_IC, MUX1_ADDR);
     _delay_us(10);
-​
-    #if(VERBOSE == 1)
-    for(int ic = 0; ic < TOTAL_IC; ic++) {
-        sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
-                        temp_sensor_voltages[ic][0],
-                        temp_sensor_voltages[ic][1],
-                        temp_sensor_voltages[ic][2],
-                        temp_sensor_voltages[ic][3],
-                        temp_sensor_voltages[ic][4],
-                        temp_sensor_voltages[ic][5],
-                        temp_sensor_voltages[ic][6],
-                        temp_sensor_voltages[ic][7],
-                        temp_sensor_voltages[ic][8],
-                        temp_sensor_voltages[ic][9],
-                        temp_sensor_voltages[ic][10],
-                        temp_sensor_voltages[ic][11],
-                        temp_sensor_voltages[ic][12],
-                        temp_sensor_voltages[ic][13],
-                        temp_sensor_voltages[ic][14],
-                        temp_sensor_voltages[ic][15],
-                        temp_sensor_voltages[ic][16],
-                        temp_sensor_voltages[ic][17],
-                        temp_sensor_voltages[ic][18],
-                        temp_sensor_voltages[ic][19]
-                        );
-​
-        LOG_println(temp_msg, strlen(temp_msg));
-    }
-    #endif
-​
+
+
+    // for(int ic = 0; ic < TOTAL_IC; ic++) {
+        // sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
+        //                 temp_sensor_voltages[ic][0],
+        //                 temp_sensor_voltages[ic][1],
+        //                 temp_sensor_voltages[ic][2],
+        //                 temp_sensor_voltages[ic][3],
+        //                 temp_sensor_voltages[ic][4],
+        //                 temp_sensor_voltages[ic][5],
+        //                 temp_sensor_voltages[ic][6],
+        //                 temp_sensor_voltages[ic][7],
+        //                 temp_sensor_voltages[ic][8],
+        //                 temp_sensor_voltages[ic][9],
+        //                 temp_sensor_voltages[ic][10],
+        //                 temp_sensor_voltages[ic][11],
+        //                 temp_sensor_voltages[ic][12],
+        //                 temp_sensor_voltages[ic][13],
+        //                 temp_sensor_voltages[ic][14],
+        //                 temp_sensor_voltages[ic][15],
+        //                 temp_sensor_voltages[ic][16],
+        //                 temp_sensor_voltages[ic][17],
+        //                 temp_sensor_voltages[ic][18],
+        //                 temp_sensor_voltages[ic][19]
+        //                 );
+
+        // LOG_println(temp_msg, strlen(temp_msg));
+    // }
+
+>>>>>>> Working BMS Code Car ran for several minutes and several times without error. e # is now the method for detecting errors. Added additional error checkin infrastructure
     if (error == 0) {
         // Check temperature values for in-range ness
         gFlag &= ~(OVER_TEMP | SOFT_OVER_TEMP | UNDER_TEMP);
 ​
         for (uint8_t ic = 0; ic < TOTAL_IC; ic ++) {
             for (uint8_t sensor = 0; sensor < NUM_TEMPS; sensor ++) {
-                if (temp_sensor_voltages[ic][sensor] < SOFT_OT_THRESHOLD) {
+                uint16_t sensor_value = temp_sensor_voltages[ic][sensor];
+                if (sensor_value < SOFT_OT_THRESHOLD) {
                     gFlag |= SOFT_OVER_TEMP;
+                    sprintf( temp_msg, "SOT ic:%u cell:%u cell Temperature%u", ic, sensor, sensor_value);
+                    LOG_println(temp_msg, strlen(temp_msg));
                 }
-                if (temp_sensor_voltages[ic][sensor] < OT_THRESHOLD) {
+                else if (sensor_value < OT_THRESHOLD) {
                     gFlag |= OVER_TEMP;
+                    sprintf( temp_msg, "OT ic:%u cell:%u cell Temperature%u", ic, sensor, sensor_value);
+                    LOG_println(temp_msg, strlen(temp_msg));
                 }
-                if (temp_sensor_voltages[ic][sensor] > UT_THRESHOLD) {
+                else if (sensor_value > UT_THRESHOLD) {
                     gFlag |= UNDER_TEMP;
+                    sprintf( temp_msg, "UT ic:%u cell:%u cell Temperature%u", ic, sensor, sensor_value);
+                    LOG_println(temp_msg, strlen(temp_msg));
+                }
+                else {
+                  // sprintf( temp_msg, "Temperature All good in the hood");
+                  // LOG_println(temp_msg, strlen(temp_msg));
                 }
             }
         }
@@ -354,12 +381,22 @@ int main (void) {
         // Transmit status task
         if (gFlag & TRANSMIT_STATUS) {
             gFlag &= ~TRANSMIT_STATUS;
-​
+
             uint8_t error = 0;
             error += read_all_voltages();
             error += read_all_temperatures();
 ​
-            // If we got a PEC error from any of those
+
+            int8_t error = 0;
+            // sprintf( temp_msg, "New Cycle %u", gFlag);
+            // LOG_println(temp_msg, strlen(temp_msg));
+
+            error += read_all_voltages();
+            error += read_all_temperatures();
+            sprintf( temp_msg, "e %d", error);
+            LOG_println(temp_msg, strlen(temp_msg));
+
+           // If we got a PEC error from any of those
             if (error != 0) {
                 missed_cycle_count += 1;
             } else {
@@ -404,6 +441,27 @@ int main (void) {
 ​
             }
             if(gCycleThreshold>0){gCycleThreshold--;}
+            gStatusMessage[6] = 0;
+
+            CAN_transmit(0, CAN_ID_BMS_CORE, CAN_LEN_BMS_CORE, gStatusMessage);
+
+        }
+
+        if ((gFlag & OVER_VOLTAGE) || (gFlag & UNDER_VOLTAGE) ||
+                    (gFlag & OVER_TEMP) || (gFlag & UNDER_TEMP) ||
+                    (missed_cycle_count >= MAX_MISSED_CYCLES)) {
+
+            RELAY_PORT &= ~_BV(RELAY_PIN);// Commented out to prevent Shutdown of car.
+            gBMSStatus = 0x00;
+            LED_PORT &= ~_BV(LED3_PIN);
+            EXT_LED_PORT &= ~_BV(EXT_LED2_PIN);
+
+            // if (gFlag & OVER_VOLTAGE) {char flagmsg[]= "Over Voltage"; LOG_println(flagmsg, strlen(flagmsg));}
+            // if (gFlag & UNDER_VOLTAGE) {char flagmsg[] = "Under Voltage"; LOG_println(flagmsg, strlen(flagmsg));}
+            // if (gFlag & OVER_TEMP) {char flagmsg[] = "Over Temp"; LOG_println(flagmsg, strlen(flagmsg));}
+            // if (gFlag & UNDER_TEMP) {char flagmsg[] = "Under Temp"; LOG_println(flagmsg, strlen(flagmsg));}
+            // if (missed_cycle_count >= MAX_MISSED_CYCLES) {char flagmsg[] = "Missed more than `MAX_MISSED_CYCLES`"; LOG_println(flagmsg, strlen(flagmsg));}
+
         }
     }
 }

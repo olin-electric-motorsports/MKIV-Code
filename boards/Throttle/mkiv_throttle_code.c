@@ -1,4 +1,4 @@
-/*
+git/*
   Code for the OEM MKIV Throttle Board
   Author: awenstrup
 */
@@ -46,10 +46,13 @@
 
 //CAN Macros
 #define CAN_THROTTLE 0
-#define CAN_DRIVE_MODE 1
-#define CAN_ESTOP 2
-#define CAN_IS 3
-#define CAN_BOTS 4
+#define CAN_BOTS 1
+#define CAN_IS 2
+#define CAN_ESTOP 3
+// #define CAN_DRIVE_MODE 1
+
+
+
 
 //Mailbox Macros
 //Input
@@ -81,7 +84,7 @@
 
 #define UPDATE_STATUS 1
 
-#define ADC_ERROR 32
+#define ADC_ERROR 8
 
 //********************Global variables***************
 uint8_t gFlag = 0;
@@ -128,7 +131,7 @@ const uint16_t throttle2_LOW = 282;
 uint8_t throttle10Counter = 0;
 const uint8_t throttle10Ticks = 6; //number of measurements that corespond to an implausibility error
 
-uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t gCANMessage[4] = {0, 0, 0, 0};
 uint8_t gCANMotorController[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 uint8_t gBrakeLightCan[7] = {0, 0, 0, 0, 0, 0, 0};
@@ -382,21 +385,21 @@ void checkPanic(void) {
 
 void checkPlausibility(void) {
   if (gThrottle1Voltage * 50 > gThrottle2Voltage * 35 || gThrottle1Voltage * 55 < gThrottle2Voltage * 32) {
-    //char uart_buf[32];
-    //sprintf(uart_buf, "10 pcnt error");
-    //LOG_println(uart_buf, strlen(uart_buf));
+    // char uart_buf[32];
+    // sprintf(uart_buf, "10 pcnt error");
+    // LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
-  else if ((gThrottle1Voltage > (throttle1_HIGH + ADC_ERROR)) || gThrottle1Voltage < throttle1_LOW - (ADC_ERROR*2)) {
-    //char uart_buf[32];
-    //sprintf(uart_buf, "t1 out of range error");
-    //LOG_println(uart_buf, strlen(uart_buf));
+  else if ((gThrottle1Voltage > (throttle1_HIGH + ADC_ERROR)) || gThrottle1Voltage < throttle1_LOW - ADC_ERROR) {
+    // char uart_buf[32];
+    // sprintf(uart_buf, "t1 out of range error");
+    // LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
-  else if ((gThrottle2Voltage > (throttle2_HIGH + ADC_ERROR)) || gThrottle2Voltage < throttle2_LOW - (ADC_ERROR*2)) {
-    //char uart_buf[32];
-    //sprintf(uart_buf, "t2 out of range error");
-    //LOG_println(uart_buf, strlen(uart_buf));
+  else if ((gThrottle2Voltage > (throttle2_HIGH + ADC_ERROR)) || gThrottle2Voltage < throttle2_LOW - ADC_ERROR) {
+    // char uart_buf[32];
+    // sprintf(uart_buf, "t2 out of range error");
+    // LOG_println(uart_buf, strlen(uart_buf));
     throttle10Counter += 1;
   }
   else {
@@ -537,42 +540,21 @@ void getAverage(void) {
 
 //*************Testing*****************
 void printThrottle1(void) {
-  char uart_buf[64];
-  sprintf(uart_buf, "tout: %d", gThrottleOut);
-  LOG_println(uart_buf, strlen(uart_buf));
+  // char uart_buf[64];
+  // sprintf(uart_buf, "tout: %d", gThrottleOut);
+  // LOG_println(uart_buf, strlen(uart_buf));
 
-  sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
-  LOG_println(uart_buf, strlen(uart_buf));
+  // sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
+  // LOG_println(uart_buf, strlen(uart_buf));
+  //
+  // sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
+  // LOG_println(uart_buf, strlen(uart_buf));
 }
 
 void printThrottle(void) {
-  char uart_buf[32];
-  sprintf(uart_buf, "t10ticks: %d", throttle10Counter);
-  LOG_println(uart_buf, strlen(uart_buf));
-}
-
-void printValues(void) {
-  char uart_buf[64];
-  sprintf(uart_buf, "tout: %d", gThrottleOut);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "tout-true: %d", gCANMessage[0]);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "t10 ticks: %d", throttle10Counter);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "gflag: %d", gFlag);
-  LOG_println(uart_buf, strlen(uart_buf));
+  // char uart_buf[32];
+  // sprintf(uart_buf, "t10ticks: %d", throttle10Counter);
+  // LOG_println(uart_buf, strlen(uart_buf));
 }
 
 void testStartup(void) {
@@ -688,15 +670,15 @@ void sendCanMessages(int viewCan){
 
 
     if(viewCan){
-        char msg1[128];
-        char msg2[128];
-        sprintf(msg1,"CAN message one to all:\nThrottle:%d\nSteering:%d\nBOTS:%d\nInertia:%d\nEstop:%d",
-        gCANMessage[0],gCANMessage[1],gCANMessage[2],gCANMessage[3],gCANMessage[4]);
-        LOG_println(msg1,strlen(msg1));
-        sprintf(msg2,"CAN message to motorcontroller:\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d",
-        gCANMotorController[0],gCANMotorController[1],gCANMotorController[2],gCANMotorController[3],
-        gCANMotorController[4],gCANMotorController[5],gCANMotorController[6],gCANMotorController[7]);
-        LOG_println(msg2,strlen(msg2));
+        // char msg1[128];
+        // char msg2[128];
+        // sprintf(msg1,"CAN message one to all:\nThrottle:%d\nSteering:%d\nBOTS:%d\nInertia:%d\nEstop:%d",
+        // gCANMessage[0],gCANMessage[1],gCANMessage[2],gCANMessage[3],gCANMessage[4]);
+        // LOG_println(msg1,strlen(msg1));
+        // sprintf(msg2,"CAN message to motorcontroller:\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d",
+        // gCANMotorController[0],gCANMotorController[1],gCANMotorController[2],gCANMotorController[3],
+        // gCANMotorController[4],gCANMotorController[5],gCANMotorController[6],gCANMotorController[7]);
+        // LOG_println(msg2,strlen(msg2));
 
     }
 }
@@ -708,7 +690,7 @@ int main(void) {
   sei();
   CAN_init(CAN_ENABLED);
   setPledOut();
-  LOG_init();
+  // LOG_init();
   enablePCINT();
   initMC();
 
@@ -736,8 +718,8 @@ int main(void) {
       storeThrottle();
       getAverage();
       checkPanic();
-      checkShutdownState();
-      //testStartup();
+      // checkShutdownState();
+      // testStartup();
       sendCanMessages(0);
 
       gError = 5;
