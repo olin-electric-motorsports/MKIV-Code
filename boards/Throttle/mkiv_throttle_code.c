@@ -1,4 +1,4 @@
-/*
+git/*
   Code for the OEM MKIV Throttle Board
   Author: awenstrup
 */
@@ -556,22 +556,6 @@ void printThrottle(void) {
   // sprintf(uart_buf, "t10ticks: %d", throttle10Counter);
   // LOG_println(uart_buf, strlen(uart_buf));
 }
-
-void printValues(void) {
-  char uart_buf[64];
-  sprintf(uart_buf, "tout: %d", gThrottleOut);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "tout-true: %d", gCANMessage[0]);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
-  LOG_println(uart_buf, strlen(uart_buf));
-
-  sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
-  LOG_println(uart_buf, strlen(uart_buf));
-}
-
 
 void testStartup(void) {
   if (bit_is_set(gFlag, FLAG_MOTOR_ON)) {
