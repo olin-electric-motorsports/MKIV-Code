@@ -450,7 +450,9 @@ int main (void) {
 
 				if(tractiveSystemStatus==TS_STATUS_DEENERGIZED){
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay, sanity check
+						RJ45_LED_PORT &= ~_BV(RJ45_LED1);
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus, sanity check
+						RJ45_LED_PORT &= ~_BV(RJ45_LED2);
 						if(bit_is_set(gFlag, FLAG_TSMS_STATUS)){ // if tsms closed
 							char tsms_closed[]="tsms_closed";
 							LOG_println(tsms_closed, strlen(tsms_closed));
@@ -472,6 +474,7 @@ int main (void) {
 							tractiveSystemStatus = TS_STATUS_PRECHARGING; // set status to precharging
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x0f; // update critical can message to precharge started
 							PRECHARGE_PORT |= _BV(PRECHARGE_CTRL); // close precharge relay
+							RJ45_LED_PORT |= _BV(RJ45_LED1);
 							resetTimer1(); // reset timer 1
 							char precharging[]="precharging";
 							LOG_println(precharging, strlen(precharging));
@@ -484,15 +487,18 @@ int main (void) {
 						LOG_println(discharging, strlen(discharging));
 						tractiveSystemStatus = TS_STATUS_DISCHARGING;
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
+						RJ45_LED_PORT &= ~_BV(RJ45_LED1);
 						msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 						resetTimer1();
 					} else if(timer1OverflowCount>OVF_COUNT_PRECHARGING){
 						char precharge_over[]="precharge_over";
 						LOG_println(precharge_over, strlen(precharge_over));// if precharging time elapsed
 						AIRMINUS_PORT |= _BV(AIRMINUS_CTRL); // close air minus
+						RJ45_LED_PORT |= _BV(RJ45_LED2);
 						_delay_ms(100); // let air minus close before we do stuff
 						//checkAIRMINUS(); // confirm closure
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL); // open precharge relay
+						RJ45_LED_PORT &= ~_BV(RJ45_LED1);
 						tractiveSystemStatus = TS_STATUS_ENERGIZED; // set status to energized
 						msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0xff; // update critical can message to precharge complete
 						char energized[]="energized";
@@ -505,6 +511,7 @@ int main (void) {
 							char discharging[]="discharging";
 							LOG_println(discharging, strlen(discharging));
 							AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus
+							RJ45_LED_PORT &= ~_BV(RJ45_LED2);
 							msgCritical[MSG_INDEX_PRECHARGE_STATUS] = 0x00; // update critical can message to precharge not started
 							tractiveSystemStatus = TS_STATUS_DISCHARGING; // set status to discharging
 							resetTimer1(); // reset timer 1
@@ -521,7 +528,9 @@ int main (void) {
 						char discharge_panic[]="panic";
 						LOG_println(discharge_panic, strlen(discharge_panic));
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus and precharge
+						RJ45_LED_PORT &= ~_BV(RJ45_LED2);
 						PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
+						RJ45_LED_PORT &= ~_BV(RJ45_LED1);
 						panic(FAULT_CODE_GENERAL); // see that panic keeps being sent...
 				}
 
