@@ -400,14 +400,15 @@ int main (void) {
 		PORTB |= _BV(PIN_COOLING_PRESSURE); // Set internal pull up resistor
 		readAllInputs(); // in case they are set high before micro starts up and therefore won't trigger an interrupt
 
-		uint8_t charging = adcReadCoolingPin();
+		uint8_t charging = 1;//adcReadCoolingPin();
 		uint8_t chargingStartupComplete = 0;
 
 		while(charging) {
 			if(bit_is_set(gFlag, UPDATE_STATUS)){
 
-				char chrg[]="charging";
-		  	LOG_println(chrg, strlen(chrg));
+				//char chrg[]="charging";
+		  	//LOG_println(chrg, strlen(chrg));
+				sendShutdownSenseCANMessage();
 
 				gFlag &= ~_BV(UPDATE_STATUS); // TODO IMD STATUS PIN TURNS OFF SLOW DEBUG
 				RJ45_LED_PORT |= _BV(RJ45_LED1);
