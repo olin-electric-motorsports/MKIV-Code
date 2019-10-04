@@ -453,7 +453,7 @@ int main (void) {
 						RJ45_LED_PORT &= ~_BV(RJ45_LED1);
 						AIRMINUS_PORT &= ~_BV(AIRMINUS_CTRL); // open air minus, sanity check
 						RJ45_LED_PORT &= ~_BV(RJ45_LED2);
-						if(bit_is_set(gFlag, FLAG_TSMS_STATUS)){ // if tsms closed
+						if(bit_is_set(gFlag, FLAG_AIRPLUS_AUX)){ // if tsms closed
 							char tsms_closed[]="tsms_closed";
 							LOG_println(tsms_closed, strlen(tsms_closed));
 							char precharge_delay[]="precharge_delay";
@@ -462,7 +462,7 @@ int main (void) {
 							resetTimer1(); // reset timer 1
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGE_DELAY) {
-						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
+						if(bit_is_clear(gFlag, FLAG_AIRPLUS_AUX)){
 							tractiveSystemStatus = TS_STATUS_DEENERGIZED;
 							char tsms_open[]="tsms_open";
 							LOG_println(tsms_open, strlen(tsms_open));
@@ -480,7 +480,7 @@ int main (void) {
 							LOG_println(precharging, strlen(precharging));
 						}
 				} else if(tractiveSystemStatus==TS_STATUS_PRECHARGING) {
-					if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){
+					if(bit_is_clear(gFlag, FLAG_AIRPLUS_AUX)){
 						char tsms_open[]="tsms_open";
 						LOG_println(tsms_open, strlen(tsms_open));
 						char discharging[]="discharging";
@@ -505,7 +505,7 @@ int main (void) {
 						LOG_println(energized, strlen(energized));
 					}
 				} else if(tractiveSystemStatus==TS_STATUS_ENERGIZED) {
-						if(bit_is_clear(gFlag, FLAG_TSMS_STATUS)){ //|| bit_is_clear(gFlag, FLAG_COOLING_PRESSURE)){ // if tsms node no longer has shutdown voltage
+						if(bit_is_clear(gFlag, FLAG_AIRPLUS_AUX)){ //|| bit_is_clear(gFlag, FLAG_COOLING_PRESSURE)){ // if tsms node no longer has shutdown voltage
 							char tsms_open[]="tsms_open";
 							LOG_println(tsms_open, strlen(tsms_open));
 							char discharging[]="discharging";
