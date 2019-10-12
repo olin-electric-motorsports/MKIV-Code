@@ -139,7 +139,7 @@ uint8_t gBrakeLightCan[7] = {0, 0, 0, 0, 0, 0, 0};
 
 uint8_t clock_prescale = 0;
 
-uint8_t timer_max = 32; //SET TO 0 BEFORE GOING HV
+uint8_t timer_max = 0; //SET TO 0 BEFORE GOING HV
 
 //********************Functions*************************
 
@@ -717,7 +717,7 @@ int main(void) {
       checkPanic();
       // checkShutdownState();
       // testStartup();
-      printThrottle1();
+      //printThrottle1();
       sendCanMessages(0);
 
       // gError = 5;
