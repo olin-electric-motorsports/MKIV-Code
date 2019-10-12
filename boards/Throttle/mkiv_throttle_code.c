@@ -138,7 +138,7 @@ uint8_t gBrakeLightCan[7] = {0, 0, 0, 0, 0, 0, 0};
 
 uint8_t clock_prescale = 0;
 
-uint8_t timer_max = 0; //SET TO 0 BEFORE GOING HV
+uint8_t timer_max = 32; //SET TO 0 BEFORE GOING HV
 
 //********************Functions*************************
 
@@ -540,15 +540,15 @@ void getAverage(void) {
 
 //*************Testing*****************
 void printThrottle1(void) {
-  // char uart_buf[64];
-  // sprintf(uart_buf, "tout: %d", gThrottleOut);
-  // LOG_println(uart_buf, strlen(uart_buf));
+  char uart_buf[64];
+  sprintf(uart_buf, "tout: %d", gThrottleOut);
+  LOG_println(uart_buf, strlen(uart_buf));
 
-  // sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
-  // LOG_println(uart_buf, strlen(uart_buf));
-  //
-  // sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
-  // LOG_println(uart_buf, strlen(uart_buf));
+  sprintf(uart_buf, "v1: %d", gThrottle1Voltage);
+  LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
+  LOG_println(uart_buf, strlen(uart_buf));
 }
 
 void printThrottle(void) {
@@ -722,10 +722,9 @@ int main(void) {
       // testStartup();
       sendCanMessages(0);
 
-      gError = 5;
-      showError();
-      //printThrottle1();
-      //printThrottle();
+      // gError = 5;
+      // showError();
+      printThrottle1();
     }
   }
 }
