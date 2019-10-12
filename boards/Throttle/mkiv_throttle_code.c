@@ -543,6 +543,9 @@ void printThrottle1(void) {
 
   sprintf(uart_buf, "v2: %d", gThrottle2Voltage);
   LOG_println(uart_buf, strlen(uart_buf));
+
+  sprintf(uart_buf, " ");
+  LOG_println(uart_buf, strlen(uart_buf));
 }
 
 void printThrottle(void) {
@@ -714,11 +717,11 @@ int main(void) {
       checkPanic();
       // checkShutdownState();
       // testStartup();
+      printThrottle1();
       sendCanMessages(0);
 
       // gError = 5;
       // showError();
-      printThrottle1();
     }
   }
 }
