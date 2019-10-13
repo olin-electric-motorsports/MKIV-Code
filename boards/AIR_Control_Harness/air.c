@@ -136,7 +136,7 @@ ISR(TIMER0_COMPA_vect) {
 		LEDtimer++;
 		if(LEDtimer > 100){
 			LEDtimer = 0;
-			LED_PORT ^= _BV(LED2);
+			//LED_PORT ^= _BV(LED2);
 		}
 }
 
@@ -159,12 +159,12 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD, COOLING_PRESSU
 
 		if(bit_is_clear(INREG_SS_HVD,PIN_SS_HVD)){
 		 sFlag |= _BV(FLAG_SS_HVD);
-		 char hvd_good[]="hvd_good";
-		 LOG_println(hvd_good, strlen(hvd_good));
+		 //char hvd_good[]="hvd_good";
+		 //LOG_println(hvd_good, strlen(hvd_good));
 		} else {
 		 sFlag &= ~_BV(FLAG_SS_HVD);
-		 char hvd_bad[]="hvd_bad";
-		 LOG_println(hvd_bad, strlen(hvd_bad));
+		 //char hvd_bad[]="hvd_bad";
+		 //LOG_println(hvd_bad, strlen(hvd_bad));
 		}
 
 		if(bit_is_clear(INREG_COOLING_PRESSURE,PIN_COOLING_PRESSURE)){
@@ -177,8 +177,8 @@ ISR(PCINT0_vect) { // PCINT0-7 -> BMS_STATUS, IMD_STATUS, SS_HVD, COOLING_PRESSU
 ISR(PCINT1_vect) { // PCINT8-15 -> AIRPLUS_AUX, AIRMINUS_AUX, SS_IMD, SS_BMS
 		if(bit_is_set(INREG_AIRPLUS_AUX,PIN_AIRPLUS_AUX)){
 		 gFlag |= _BV(FLAG_AIRPLUS_AUX);
-		 char plus[]="plus";
-		 LOG_println(plus, strlen(plus));
+		 //char plus[]="plus";
+		 //LOG_println(plus, strlen(plus));
 		} else {
 		 gFlag &= ~_BV(FLAG_AIRPLUS_AUX);
 		}
@@ -386,9 +386,9 @@ int main (void) {
 		initTimer1();
     sei(); //Inititiates interrupts for the ATMega
     CAN_init(CAN_ENABLED);
-		ADC_init();
-		LOG_init();
-		CAN_wait_on_receive(MOB_BRAKELIGHT, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
+		//ADC_init();
+		//LOG_init();
+		//CAN_wait_on_receive(MOB_BRAKELIGHT, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
 
     // Enable interrupt
     PCICR |= _BV(PCIE0) | _BV(PCIE1) | _BV(PCIE2);
@@ -411,7 +411,7 @@ int main (void) {
 				sendShutdownSenseCANMessage();
 
 				gFlag &= ~_BV(UPDATE_STATUS); // TODO IMD STATUS PIN TURNS OFF SLOW DEBUG
-				RJ45_LED_PORT |= _BV(RJ45_LED1);
+				//RJ45_LED_PORT |= _BV(RJ45_LED1);
 
 				/*if(bit_is_set(INREG_AIRPLUS_AUX,PIN_AIRPLUS_AUX)){
 				 gFlag |= _BV(FLAG_AIRPLUS_AUX);
@@ -424,11 +424,12 @@ int main (void) {
 			 }*/
 
 				if(bit_is_set(gFlag, FLAG_AIRPLUS_AUX) && ~chargingStartupComplete){
-					//_delay_ms(2000);
+					_delay_ms(2000);
 					RJ45_LED_PORT |= _BV(RJ45_LED2);
 					PRECHARGE_PORT |= _BV(PRECHARGE_CTRL);
 					_delay_ms(2000);
 					AIRMINUS_PORT |= _BV(AIRMINUS_CTRL);
+					RJ45_LED_PORT |= _BV(RJ45_LED1);
 					PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
 					chargingStartupComplete = 1;
 					RJ45_LED_PORT &= ~_BV(RJ45_LED2);
