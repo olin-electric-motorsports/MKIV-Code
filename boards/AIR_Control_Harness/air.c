@@ -401,7 +401,8 @@ int main (void) {
 		readAllInputs(); // in case they are set high before micro starts up and therefore won't trigger an interrupt
 
 		uint8_t charging = 1;//adcReadCoolingPin();
-		uint8_t chargingStartupComplete = 0;
+		uint8_t cFlag = 0x00;
+		// uint8_t chargingStartupComplete = 0;
 
 		while(charging) {
 			if(bit_is_set(gFlag, UPDATE_STATUS)){
@@ -423,7 +424,7 @@ int main (void) {
 				 LOG_println(op, strlen(op));
 			 }*/
 
-				if(bit_is_set(gFlag, FLAG_AIRPLUS_AUX) && ~chargingStartupComplete){
+				if(bit_is_set(gFlag, FLAG_AIRPLUS_AUX) && bit_is_clear(cFlag,0)){
 					_delay_ms(2000);
 					RJ45_LED_PORT |= _BV(RJ45_LED2);
 					PRECHARGE_PORT |= _BV(PRECHARGE_CTRL);
@@ -431,7 +432,8 @@ int main (void) {
 					AIRMINUS_PORT |= _BV(AIRMINUS_CTRL);
 					RJ45_LED_PORT |= _BV(RJ45_LED1);
 					PRECHARGE_PORT &= ~_BV(PRECHARGE_CTRL);
-					chargingStartupComplete = 1;
+					// chargingStartupComplete = 1;
+					cFlag = 0x01;
 					RJ45_LED_PORT &= ~_BV(RJ45_LED2);
 				}
 
