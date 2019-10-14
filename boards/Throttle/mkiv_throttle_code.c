@@ -647,7 +647,7 @@ void sendCanMessages(int viewCan){
     gCANMotorController[1] = mc_remap >> 8;	//torque command
     gCANMotorController[2] = 0x00;		//speed command (unused)
     gCANMotorController[3] = 0x00;		//speed command (unused)
-    gCANMotorController[4] = 0x01;		//direction command (0=reverse,,,1=forward)
+    gCANMotorController[4] = 0x00;		//direction command (0=reverse,,,1=forward)
     gCANMotorController[5] = bit_is_set(gFlag,FLAG_MOTOR_ON) ? 0x01 : 0x00; //inverter on or off
     gCANMotorController[6] = 0x00;		// commanded torque limit, if 0, uses EEPROM set value
     gCANMotorController[7] = 0x00;		// commanded torque limit, ^
