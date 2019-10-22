@@ -156,13 +156,13 @@ ISR(CAN_INT_vect) {
       can_recv_msg[6] = CANMSG;   // Cell Balancing Status
 
       OCR1B = can_recv_msg[3]; //SoC for PWM
-      
+
 
       // Grab BMS fault light
       if(can_recv_msg[3] == 0x00) {
           gFlag |= _BV(BMS_LIGHT);   // If BMS shutdown is low, turn light pin high
 
-      } 
+      }
       //Setup to Receive Again
       CANSTMOB = 0x00;
       CAN_wait_on_receive(BMS_CORE_MBOX, CAN_ID_BMS_CORE, CAN_LEN_BMS_CORE, CAN_MSK_SINGLE);
@@ -390,6 +390,9 @@ int main(void){
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
+
+    //ADC Enable
+    initADC();
 
     // CBN Enable
     CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_MSK_SINGLE);
